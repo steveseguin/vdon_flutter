@@ -1,7 +1,9 @@
 # VDO.Ninja's Flutter app.
 
 ## Usage
+```
 git clone https://github.com/steveseguin/vdon_flutter
 cd vdon_flutter
 flutter packages get
 flutter run
+```
