@@ -1,0 +1,25 @@
+name: VDO.Ninja
+description: Simple capture app for VDO.NInja
+version: 1.0.2
+
+environment:
+  sdk: ">=2.2.2 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.0
+  flutter_webrtc: ^0.5.8
+  shared_preferences: ^0.5.12
+  http: ^0.12.1
+  path_provider: ^1.6.24
+  wakelock: ^0.5.2
+  html: ^0.15.0
+  js: ^0.6.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
