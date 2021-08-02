@@ -2,14 +2,23 @@ import 'package:flutter/material.dart';
 import 'dart:core';
 import 'signaling.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:share/share.dart';
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
 
   final String streamID;
   final String screenShare;
+  final bool preview;
+  final bool muted;
 
-  CallSample({Key key, @required this.streamID,  @required this.screenShare}) : super(key: key);
+  CallSample(
+      {Key key,
+      @required this.streamID,
+      @required this.screenShare,
+      this.preview,
+      this.muted})
+      : super(key: key);
 
   @override
   _CallSampleState createState() => _CallSampleState();
@@ -22,6 +31,8 @@ class _CallSampleState extends State<CallSample> {
   RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   bool _inCalling = false;
+  bool muted = false;
+  bool preview = true;
 
   // ignore: unused_element
   _CallSampleState({Key key});
@@ -49,10 +60,10 @@ class _CallSampleState extends State<CallSample> {
   void _connect() async {
     if (_signaling == null) {
       _signaling = Signaling(widget.streamID)..connect();
-	  
-	  _signaling.setStreamID(widget.streamID);
-	  _signaling.setScreenShare(widget.screenShare);
-	  
+
+      _signaling.setStreamID(widget.streamID);
+      _signaling.setScreenShare(widget.screenShare);
+
       _signaling.onSignalingStateChange = (SignalingState state) {
         switch (state) {
           case SignalingState.ConnectionClosed:
@@ -90,6 +101,7 @@ class _CallSampleState extends State<CallSample> {
       });
 
       _signaling.onLocalStream = ((stream) {
+        print("LOCAL STREAM");
         _localRenderer.srcObject = stream;
       });
 
@@ -110,65 +122,166 @@ class _CallSampleState extends State<CallSample> {
   }
 
   _hangUp() {
+    _inCalling = false;
+    _signaling.close();
+    Navigator.of(context).pop();
   }
 
   _switchCamera() {
     _signaling.switchCamera();
   }
 
-  _muteMic() {
+  _toggleMic() {
+    setState(() {
+      muted = !muted;
+    });
     _signaling.muteMic();
   }
 
-  _buildRow(context, peer) {
-    var self = (peer['id'] == _selfId);
-    return ListBody(children: <Widget>[
-      ListTile(
-        title: Text(self
-            ? peer['name'] + '[Your self]'
-            : peer['name'] + '[' + peer['user_agent'] + ']'),
-        onTap: null,
-        trailing: SizedBox(
-            width: 100.0,
-            child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  IconButton(
-                    icon: const Icon(Icons.videocam),
-                    onPressed: () => _invitePeer(context, peer['id'], false),
-                    tooltip: 'Video calling',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.screen_share),
-                    onPressed: () => _invitePeer(context, peer['id'], true),
-                    tooltip: 'Screen sharing',
-                  )
-                ])),
-        subtitle: Text('id: ' + peer['id']),
-      ),
-      Divider()
-    ]);
+  _togglePreview() {
+    var status = false;
+
+    print(_localRenderer.srcObject);
+    if (_localRenderer.srcObject == null) {
+      _localRenderer.srcObject = _signaling.getLocalStream();
+      status = true;
+    } else {
+      _localRenderer.srcObject = null;
+      status = false;
+    }
+
+    setState(() {
+      preview = status;
+    });
+  }
+
+  _info() {
+    showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            content: Text(
+              "Keep the &password=false on the view link.\n\r\n&bitrate and &codec can be used on the viewer side.",
+            ),
+          );
+        });
   }
 
   @override
   Widget build(BuildContext context) {
+    final vdonLink =
+        "https://vdo.ninja/?view=" + widget.streamID + "&password=false";
+    final key = new GlobalKey<ScaffoldState>();
+
+    Widget callControls() {
+      List<Widget> buttons = [];
+
+      if (widget.screenShare != 'screen') {
+        buttons.add(RawMaterialButton(
+          onPressed: () => {_toggleMic()},
+          fillColor: muted ? Colors.red : Colors.green,
+          child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(15),
+        ));
+
+        buttons.add(RawMaterialButton(
+          onPressed: () => {_togglePreview()},
+          fillColor: preview ? Colors.green : Colors.red,
+          child:
+              preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(15),
+        ));
+      }
+
+      buttons.add(RawMaterialButton(
+        onPressed: () => {_hangUp()},
+        fillColor: Colors.red,
+        child: Icon(Icons.call_end),
+        shape: CircleBorder(),
+        elevation: 2,
+        padding: EdgeInsets.all(15),
+      ));
+
+      return SizedBox(
+        height: 100,
+        width: double.infinity,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: buttons,
+        ),
+      );
+    }
+
     return Scaffold(
+      key: key,
       appBar: AppBar(
-        title: Text('VDO.Ninja',
-		style: TextStyle(color: Color(0xffffffff),)
-		),
-		backgroundColor: const Color(0x000000FF),
-		automaticallyImplyLeading: false,
-        actions: <Widget>[
-        
+        title: Text('View Link'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.share),
+            onPressed: () => Share.share(vdonLink),
+          ),
+          widget.screenShare != 'screen'
+              ? IconButton(
+                  icon: Icon(Icons.cameraswitch),
+                  onPressed: () => _switchCamera(),
+                )
+              : Container(),
+          IconButton(
+            icon: Icon(Icons.info),
+            onPressed: () => _info(),
+          )
         ],
       ),
-      body: new Center(
-        child: new Text("View Link:\n\r\n\rhttps://vdo.ninja/?view="+widget.streamID+"&password=false\n\r\n\rDon't forget to append &password=false to the view link\n\r\n\r&bitrate and &codec can be used on the viewer side.",
-		style: TextStyle(color: Color(0xffffffff),)),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Container(
+              color: Theme.of(context).buttonColor,
+              padding: EdgeInsets.all(20),
+              child: SelectableText(
+                vdonLink,
+                style: Theme.of(context)
+                    .textTheme
+                    .headline2
+                    .apply(color: Colors.black),
+                onTap: () => {Share.share(vdonLink)},
+              ),
+            ),
+            Expanded(
+              child: Stack(alignment: Alignment.bottomCenter, children: [
+                widget.screenShare != 'screen'
+                    ? RTCVideoView(_localRenderer)
+                    : Container(
+                        color: Theme.of(context).canvasColor,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: Text(
+                                "Open the view link, accept permissions on the app.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 20),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                callControls(),
+              ]),
+            ),
+          ],
+        ),
       ),
-	  backgroundColor: const Color(0x000000ff),
-          
+      backgroundColor: const Color(0x000000ff),
     );
   }
 }
