@@ -358,7 +358,7 @@ class Signaling {
   Future<void> _cleanSessions() async {
     if (_localStream != null) {
       _localStream.getTracks().forEach((element) async {
-        await element.dispose();
+        await element.stop();
       });
       await _localStream.dispose();
       _localStream = null;
@@ -366,5 +366,8 @@ class Signaling {
     _sessions.forEach((key, sess) async {
       await sess.close();
     });
+
+    // Close the websocket connection so the viewer doesn't auto-reconnect.
+    _socket.close();
   }
 }
