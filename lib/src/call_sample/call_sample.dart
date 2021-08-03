@@ -11,13 +11,15 @@ class CallSample extends StatefulWidget {
   final String screenShare;
   final bool preview;
   final bool muted;
+  final bool mirrored;
 
   CallSample(
       {Key key,
       @required this.streamID,
       @required this.screenShare,
       this.preview,
-      this.muted})
+      this.muted,
+      this.mirrored})
       : super(key: key);
 
   @override
@@ -33,6 +35,7 @@ class _CallSampleState extends State<CallSample> {
   bool _inCalling = false;
   bool muted = false;
   bool preview = true;
+  bool mirrored = true;
 
   // ignore: unused_element
   _CallSampleState({Key key});
@@ -69,6 +72,9 @@ class _CallSampleState extends State<CallSample> {
           case SignalingState.ConnectionClosed:
           case SignalingState.ConnectionError:
           case SignalingState.ConnectionOpen:
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text("Connection open, waiting for the viewer.")));
+            _localRenderer.srcObject = _signaling.getLocalStream();
             break;
         }
       };
@@ -155,6 +161,12 @@ class _CallSampleState extends State<CallSample> {
     });
   }
 
+  _toggleMirror() {
+    setState(() {
+      mirrored = !mirrored;
+    });
+  }
+
   _info() {
     showDialog(
         context: context,
@@ -174,10 +186,13 @@ class _CallSampleState extends State<CallSample> {
     final key = new GlobalKey<ScaffoldState>();
 
     Widget callControls() {
+      double buttonWidth = 70;
       List<Widget> buttons = [];
 
       if (widget.screenShare != 'screen') {
         buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
           onPressed: () => {_toggleMic()},
           fillColor: muted ? Colors.red : Colors.green,
           child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
@@ -187,6 +202,8 @@ class _CallSampleState extends State<CallSample> {
         ));
 
         buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
           onPressed: () => {_togglePreview()},
           fillColor: preview ? Colors.green : Colors.red,
           child:
@@ -195,9 +212,33 @@ class _CallSampleState extends State<CallSample> {
           elevation: 2,
           padding: EdgeInsets.all(15),
         ));
+
+        buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: () => {_switchCamera()},
+          fillColor: Theme.of(context).buttonColor,
+          child: Icon(Icons.cameraswitch),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(15),
+        ));
+
+        buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: () => {_toggleMirror()},
+          fillColor: Theme.of(context).buttonColor,
+          child: Icon(Icons.compare_arrows),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(15),
+        ));
       }
 
       buttons.add(RawMaterialButton(
+        constraints: BoxConstraints(minWidth: buttonWidth),
+        visualDensity: VisualDensity.comfortable,
         onPressed: () => {_hangUp()},
         fillColor: Colors.red,
         child: Icon(Icons.call_end),
@@ -206,12 +247,21 @@ class _CallSampleState extends State<CallSample> {
         padding: EdgeInsets.all(15),
       ));
 
-      return SizedBox(
-        height: 100,
-        width: double.infinity,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: buttons,
+      return Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(50),
+          child: Container(
+            color: Colors.black.withAlpha(100),
+            child: SizedBox(
+              height: 80,
+              width: MediaQuery.of(context).size.width,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: buttons,
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -219,18 +269,12 @@ class _CallSampleState extends State<CallSample> {
     return Scaffold(
       key: key,
       appBar: AppBar(
-        title: Text('View Link'),
+        title: Text('Sharing'),
         actions: [
           IconButton(
             icon: Icon(Icons.share),
             onPressed: () => Share.share(vdonLink),
           ),
-          widget.screenShare != 'screen'
-              ? IconButton(
-                  icon: Icon(Icons.cameraswitch),
-                  onPressed: () => _switchCamera(),
-                )
-              : Container(),
           IconButton(
             icon: Icon(Icons.info),
             onPressed: () => _info(),
@@ -241,22 +285,13 @@ class _CallSampleState extends State<CallSample> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            Container(
-              color: Theme.of(context).buttonColor,
-              padding: EdgeInsets.all(20),
-              child: SelectableText(
-                vdonLink,
-                style: Theme.of(context)
-                    .textTheme
-                    .headline2
-                    .apply(color: Colors.black),
-                onTap: () => {Share.share(vdonLink)},
-              ),
-            ),
             Expanded(
               child: Stack(alignment: Alignment.bottomCenter, children: [
                 widget.screenShare != 'screen'
-                    ? RTCVideoView(_localRenderer)
+                    ? RTCVideoView(
+                        _localRenderer,
+                        mirror: mirrored,
+                      )
                     : Container(
                         color: Theme.of(context).canvasColor,
                         child: Column(
