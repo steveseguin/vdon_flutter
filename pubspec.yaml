@@ -17,6 +17,7 @@ dependencies:
   html: ^0.15.0
   js: ^0.6.3
   share: ^2.0.4
+  url_launcher: ^6.0.9
 
 dev_dependencies:
   flutter_test:
