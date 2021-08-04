@@ -72,9 +72,6 @@ class _CallSampleState extends State<CallSample> {
           case SignalingState.ConnectionClosed:
           case SignalingState.ConnectionError:
           case SignalingState.ConnectionOpen:
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text("Connection open, waiting for the viewer.")));
-            _localRenderer.srcObject = _signaling.getLocalStream();
             break;
         }
       };
@@ -290,6 +287,8 @@ class _CallSampleState extends State<CallSample> {
                 widget.screenShare != 'screen'
                     ? RTCVideoView(
                         _localRenderer,
+                        objectFit:
+                            RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                         mirror: mirrored,
                       )
                     : Container(
