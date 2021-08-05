@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 Color ninjaDarkBlue = Color(0xff141926);
-Color ninjaPrimaryColor = Color(0xffFE003B);
+Color ninjaPrimaryColor = Color(0xFF0F131D);
 Color ninjaBackgroundColor = Color(0xff141926);
 Color ninjaCardColor = Color(0xffdddddd);
 
