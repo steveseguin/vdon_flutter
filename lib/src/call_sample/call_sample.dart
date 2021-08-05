@@ -81,6 +81,7 @@ class _CallSampleState extends State<CallSample> {
           case CallState.CallStateNew:
             setState(() {
               _inCalling = true;
+              _localRenderer.srcObject = _signaling.getLocalStream();
             });
             break;
           case CallState.CallStateBye:
@@ -106,6 +107,7 @@ class _CallSampleState extends State<CallSample> {
       _signaling.onLocalStream = ((stream) {
         print("LOCAL STREAM");
         _localRenderer.srcObject = stream;
+        setState(() {});
       });
 
       _signaling.onAddRemoteStream = ((stream) {
@@ -170,7 +172,7 @@ class _CallSampleState extends State<CallSample> {
         builder: (BuildContext context) {
           return AlertDialog(
             content: Text(
-              "Keep the &password=false on the view link.\n\r\n&bitrate and &codec can be used on the viewer side.",
+              "&bitrate and &codec can be used on the viewer side.",
             ),
           );
         });
@@ -269,10 +271,6 @@ class _CallSampleState extends State<CallSample> {
         title: Text('Sharing'),
         actions: [
           IconButton(
-            icon: Icon(Icons.share),
-            onPressed: () => Share.share(vdonLink),
-          ),
-          IconButton(
             icon: Icon(Icons.info),
             onPressed: () => _info(),
           )
@@ -300,7 +298,7 @@ class _CallSampleState extends State<CallSample> {
                             Padding(
                               padding: const EdgeInsets.all(20.0),
                               child: Text(
-                                "Open the view link, accept permissions on the app.",
+                                "Open the view link. Permission to share the screen will then be requested.",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: Colors.white, fontSize: 20),
@@ -309,6 +307,33 @@ class _CallSampleState extends State<CallSample> {
                           ],
                         ),
                       ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    color: Colors.black.withAlpha(100),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Icon(
+                          Icons.video_call,
+                          size: 40,
+                          color: Colors.white,
+                        ),
+                        GestureDetector(
+                          onTap: () => Share.share(vdonLink),
+                          child: Text(
+                            "Open in OBS Browser Source: \n" + vdonLink,
+                            style: TextStyle(color: Colors.white),
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 callControls(),
               ]),
             ),
