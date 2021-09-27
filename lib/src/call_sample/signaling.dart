@@ -4,11 +4,9 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'random_string.dart';
 
-import '../utils/device_info.dart'
-    if (dart.library.js) '../utils/device_info_web.dart';
-import '../utils/websocket.dart'
-    if (dart.library.js) '../utils/websocket_web.dart';
-import '../utils/turn.dart' if (dart.library.js) '../utils/turn_web.dart';
+import '../utils/device_info.dart';
+import '../utils/websocket.dart';
+import '../utils/turn.dart';
 
 enum SignalingState {
   ConnectionOpen,
@@ -89,6 +87,8 @@ class Signaling {
 
   close() async {
     _cleanSessions();
+    //_localStream = null;
+    //_remoteStreams = null;
   }
 
   MediaStream getLocalStream() {
