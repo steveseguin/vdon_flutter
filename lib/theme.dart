@@ -9,11 +9,11 @@ var theme = ThemeData(
   primaryColor: ninjaPrimaryColor,
   backgroundColor: ninjaBackgroundColor,
   cardTheme: CardTheme(color: ninjaCardColor, elevation: 1),
-  accentColor: ninjaPrimaryColor,
   canvasColor: ninjaDarkBlue,
   textTheme: TextTheme(
     headline1: TextStyle(fontSize: 25.0, fontWeight: FontWeight.normal),
     headline2: TextStyle(fontSize: 15.0, color: Colors.red),
     headline3: TextStyle(fontSize: 15.0, color: Colors.white),
   ),
+  colorScheme: ColorScheme.fromSwatch().copyWith(secondary: ninjaPrimaryColor),
 );

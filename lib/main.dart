@@ -1,6 +1,6 @@
 import 'dart:core';
 
-import 'package:VDO.Ninja/theme.dart';
+import 'package:vdo_ninja/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
