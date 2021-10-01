@@ -7,3 +7,10 @@ cd vdon_flutter
 flutter packages get
 flutter run
 ```
+
+## Supported viewer flags
+
+- &codec
+- &bitrate
+- &audiobitrate
+- &scale
