@@ -14,3 +14,5 @@ flutter run
 - &bitrate
 - &audiobitrate
 - &scale
+
+The viewer requires &password=false to be used.
