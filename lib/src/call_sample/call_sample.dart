@@ -187,9 +187,8 @@ class _CallSampleState extends State<CallSample> {
     Widget callControls() {
       double buttonWidth = 70;
       List<Widget> buttons = [];
-
-      if (widget.screenShare != 'screen') {
-        buttons.add(RawMaterialButton(
+	  
+	   buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_toggleMic()},
@@ -199,6 +198,9 @@ class _CallSampleState extends State<CallSample> {
           elevation: 2,
           padding: EdgeInsets.all(15),
         ));
+
+      if (widget.screenShare != 'screen') {
+       
 
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
