@@ -45,3 +45,8 @@ flutter build apk
 - &scale
 
 The viewer requires &password=false to be used.
+
+## Contributions welcomed
+
+- UVC / USB camera and microphone support is very much welcomed
+- Screen share support added to iOS is very much welcomed
