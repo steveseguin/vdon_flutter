@@ -1,0 +1,15 @@
+curl "https://app-a-plugin-service.stageten.tv/voting/cast-vote" ^
+  -H "authority: app-a-plugin-service.stageten.tv" ^
+    -H "sec-ch-ua: ^\^"Google Chrome^\^";v=^\^"93^\^", ^\^" Not;A Brand^\^";v=^\^"99^\^", ^\^"Chromium^\^";v=^\^"93^\^"" ^
+      -H "accept: application/json, text/plain, */*" ^
+        -H "content-type: application/json;charset=UTF-8" ^
+	  -H "sec-ch-ua-mobile: ?0" ^
+	    -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.25 Safari/537.36" ^
+	      -H "sec-ch-ua-platform: ^\^"Windows^\^"" ^
+	        -H "origin: https://play.rozy.tv" ^
+		  -H "sec-fetch-site: cross-site" ^
+		    -H "sec-fetch-mode: cors" ^
+		      -H "sec-fetch-dest: empty" ^
+		        -H "referer: https://play.rozy.tv/channel/5d1a7cc9-7669-44f5-82a2-b4602a8e1249" ^
+			  -H "accept-language: en-CA,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7,zh;q=0.6" ^
+			    --data-raw "^{^\^"channelId^\^":^\^"5d1a7cc9-7669-44f5-82a2-b4602a8e1249^\^",^\^"questionId^\^":^\^"19ac628d-bea4-4d42-ae3b-5a8f7714436d^\^",^\^"votes^\^":^[^{^\^"answerId^\^":^\^"af74b48c-14af-4d95-a501-be93dbc77cab^\^",^\^"count^\^":8^}^]^}"   --compressed

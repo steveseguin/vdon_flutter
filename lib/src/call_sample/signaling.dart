@@ -265,8 +265,20 @@ class Signaling {
   Future<MediaStream> createStream(bool userScreen) async {
     MediaStream stream;
     if (screenShare == "screen") {
-      stream = await navigator.mediaDevices
-          .getDisplayMedia({'audio': true, 'video': true});
+      stream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
+	
+	  if (stream.getAudioTracks().length==0){
+			MediaStream audioStream = await navigator.mediaDevices.getUserMedia(
+				{'audio': {'mandatory': {
+					'googEchoCancellation': false,
+					'echoCancellation': false,
+					'noiseSuppression': false,
+					'autoGainControl': false
+				}}});
+			audioStream.getAudioTracks().forEach((element) async {
+				await stream.addTrack(element); 
+            });
+		}
     } else if (screenShare == "front" || screenShare == "1") {
       stream = await navigator.mediaDevices.getUserMedia({
         'audio': true,
@@ -287,19 +299,6 @@ class Signaling {
       stream = await navigator.mediaDevices.getUserMedia(constraints);
     }
 
-    /* if (stream.getAudioTracks().length==0){
-			MediaStream audioStream = await navigator.mediaDevices.getUserMedia(
-				{'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false,
-					'noiseSuppression': false,
-					'autoGainControl': false
-				}}});
-			audioStream.getAudioTracks().forEach((element) async {
-				await stream.addTrack(element); 
-            });
-			
-		} */
 
     onLocalStream?.call(stream);
     return stream;
