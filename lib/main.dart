@@ -10,6 +10,7 @@ import 'src/route_item.dart';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock/wakelock.dart';
+import 'package:flutter_background/flutter_background.dart';
 
 void main() => runApp(new MyApp());
 
@@ -24,6 +25,8 @@ class MyApp extends StatefulWidget {
   @override
   _MyAppState createState() => new _MyAppState();
 }
+
+
 
 enum DialogDemoAction {
   cancel,
@@ -141,6 +144,14 @@ class _MyAppState extends State<MyApp> {
       Wakelock.enable();
       // You could also use Wakelock.toggle(on: true);
     });
+	
+	final androidConfig = FlutterBackgroundAndroidConfig(
+		notificationTitle: "flutter_background example app",
+		notificationText: "Background notification for keeping the example app running in the background",
+		notificationImportance: AndroidNotificationImportance.Default,
+		notificationIcon: AndroidResource(name: 'background_icon', defType: 'drawable'), // Default is ic_launcher from folder mipmap
+	);
+	bool success = await FlutterBackground.initialize(androidConfig: androidConfig);
   }
 
   void showDemoDialog<T>({BuildContext context, Widget child}) {
