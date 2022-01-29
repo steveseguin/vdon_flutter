@@ -39,7 +39,6 @@ class Signaling {
   JsonDecoder _decoder = JsonDecoder();
   SimpleWebSocket _socket;
   var _port = 443;
-  var _turnCredential;
   var _sessions = {};
   var streamID = "";
   var screenShare = "screen";
@@ -63,9 +62,14 @@ class Signaling {
     'iceServers': [
       {'url': 'stun:stun.l.google.com:19302'},
       {
-        'url': 'turn:turn-usc1.obs.ninja:3478',
-        'username': 'obsninja',
-        'credential': 'pleaseDoNotAbuse'
+        'url': 'turn:turn-use1.vdo.ninja:3478',
+        'username': 'vdoninja',
+        'credential': 'EastSideRepresentZ'
+      },
+      {
+        'url': 'turns:www.turn.vdo.ninja:443',
+        'username': 'vdoninja',
+        'credential': 'IchBinSteveDerNinja'
       },
     ]
   };
@@ -217,27 +221,6 @@ class Signaling {
 
   Future<void> connect() async {
     _socket = SimpleWebSocket();
-
-    if (_turnCredential == null) {
-      try {
-        _turnCredential = {
-          "username": "obsninja",
-          "password": "pleaseDoNotAbuse",
-          "ttl": 86400,
-          "uris": ["turn:turn-usc1.obs.ninja:3478"],
-        };
-
-        _iceServers = {
-          'iceServers': [
-            {
-              'urls': _turnCredential['uris'][0],
-              'username': _turnCredential['username'],
-              'credential': _turnCredential['password']
-            },
-          ]
-        };
-      } catch (e) {}
-    }
 
     _socket.onOpen = () {
       print('onOpen');

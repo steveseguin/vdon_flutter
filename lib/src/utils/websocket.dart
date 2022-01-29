@@ -18,7 +18,7 @@ class SimpleWebSocket {
     connect(streamID) async {
 		print("CONNECTING");
         try {
-            _socket = await WebSocket.connect("wss://wss13.obs.ninja:443");
+            _socket = await WebSocket.connect("wss://wss.vdo.ninja:443");
 			
 			var request = Map();
 			request["request"] = "seed";
