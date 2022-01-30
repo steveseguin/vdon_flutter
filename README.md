@@ -7,7 +7,7 @@
 - can work when in the background, at least until battery-saving mode of some phones kick in
 - can work with custom domains, other than vdo.ninja; just replace vdo.ninja with your own domain
 
-<img src="https://user-images.githubusercontent.com/2575698/151709718-66d589ee-5ed3-4249-8646-f16491ca2a82.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709736-b0ca7d6a-484f-4bb5-8669-ce9a06002991.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709732-d9729049-b7d3-4c90-8e2e-b0bc1a1b094f.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709718-66d589ee-5ed3-4249-8646-f16491ca2a82.jpg" width="100px">
+<img src="https://user-images.githubusercontent.com/2575698/151709718-66d589ee-5ed3-4249-8646-f16491ca2a82.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709736-b0ca7d6a-484f-4bb5-8669-ce9a06002991.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709732-d9729049-b7d3-4c90-8e2e-b0bc1a1b094f.jpg" width="100px"> <img src="https://user-images.githubusercontent.com2575698/151709947-6beeb4f0-d8bd-4fbf-9d94-294c5f4efdb3.jpg" width="100px">
 
 ## Limitations
 
