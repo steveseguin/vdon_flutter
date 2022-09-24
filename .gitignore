@@ -29,11 +29,13 @@
 .pub/
 /build/
 
+
 # Android related
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
 **/android/captures/
 **/android/gradlew
+**/android/app/debug/
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
