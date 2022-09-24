@@ -57,7 +57,11 @@ From the `ios` folder, you may want to try installing the gems there or whatever
 
 Once Flutter is installed, Just open the project with XCode, connect a real iOS device to the system, and build the app. The project should be in the ios folder of the repo.
 
-You may need a developer certificate from Apple to build iOS; Apple might have free ones available for testing only, but otherwise, ~ $100 USD.
+You may need a developer certificate from Apple to build iOS; Apple might have free ones available for testing only, but otherwise, ~ $100 USD. 
+
+## App store hosted versions
+
+If you make a pull-request to this repo, I can try to update the store-hosted version of the app with your approved changes. The app is free to download from the store.
 
 ## Supported viewer-side flags
 
