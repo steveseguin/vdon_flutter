@@ -8,7 +8,7 @@ class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
 
   final String streamID;
-  final String screenShare;
+  final String deviceID;
   final bool preview;
   final bool muted;
   final bool mirrored;
@@ -16,7 +16,7 @@ class CallSample extends StatefulWidget {
   CallSample(
       {Key key,
       @required this.streamID,
-      @required this.screenShare,
+      @required this.deviceID,
       this.preview,
       this.muted,
       this.mirrored})
@@ -34,6 +34,7 @@ class _CallSampleState extends State<CallSample> {
   RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   bool _inCalling = false;
   bool muted = false;
+  bool torch = false;
   bool preview = true;
   bool mirrored = true;
 
@@ -61,11 +62,10 @@ class _CallSampleState extends State<CallSample> {
   }
 
   void _connect() async {
-    if (_signaling == null) {
-      _signaling = Signaling(widget.streamID)..connect();
 
-      _signaling.setStreamID(widget.streamID);
-      _signaling.setScreenShare(widget.screenShare);
+    if (_signaling == null) {
+      _signaling = Signaling(widget.streamID, widget.deviceID);
+	  _signaling.connect();
 
       _signaling.onSignalingStateChange = (SignalingState state) {
         switch (state) {
@@ -136,6 +136,13 @@ class _CallSampleState extends State<CallSample> {
     _signaling.switchCamera();
   }
 
+  _toggleFlashlight(){
+	   setState(() {
+		  torch = !torch;
+		});
+		_signaling.toggleTorch(torch);
+  }
+
   _toggleMic() {
     setState(() {
       muted = !muted;
@@ -180,14 +187,13 @@ class _CallSampleState extends State<CallSample> {
 
   @override
   Widget build(BuildContext context) {
-    final vdonLink =
-        "https://vdo.ninja/?view=" + widget.streamID + "&password=false";
+    final vdonLink = "https://vdo.ninja/?view=" + widget.streamID + "&password=false";
     final key = new GlobalKey<ScaffoldState>();
 
     Widget callControls() {
-      double buttonWidth = 70;
+      double buttonWidth = 60;
       List<Widget> buttons = [];
-	  
+
 	   buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
@@ -199,16 +205,16 @@ class _CallSampleState extends State<CallSample> {
           padding: EdgeInsets.all(15),
         ));
 
-      if (widget.screenShare != 'screen') {
-       
+
+      if (widget.deviceID != 'screen') {
+
 
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_togglePreview()},
           fillColor: preview ? Colors.green : Colors.red,
-          child:
-              preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
+          child: preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
           shape: CircleBorder(),
           elevation: 2,
           padding: EdgeInsets.all(15),
@@ -235,6 +241,19 @@ class _CallSampleState extends State<CallSample> {
           elevation: 2,
           padding: EdgeInsets.all(15),
         ));
+
+
+		 buttons.add(RawMaterialButton(
+		  constraints: BoxConstraints(minWidth: buttonWidth),
+		  visualDensity: VisualDensity.comfortable,
+		  onPressed: () => {_toggleFlashlight()},
+		  fillColor: !torch ? Theme.of(context).buttonColor : Colors.green,
+		  child: !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
+		  shape: CircleBorder(),
+		  elevation: 2,
+		  padding: EdgeInsets.all(15),
+		));
+
       }
 
       buttons.add(RawMaterialButton(
@@ -284,7 +303,7 @@ class _CallSampleState extends State<CallSample> {
           children: [
             Expanded(
               child: Stack(alignment: Alignment.bottomCenter, children: [
-                widget.screenShare != 'screen'
+                widget.deviceID != 'screen'
                     ? RTCVideoView(
                         _localRenderer,
                         objectFit:
@@ -300,7 +319,7 @@ class _CallSampleState extends State<CallSample> {
                             Padding(
                               padding: const EdgeInsets.all(20.0),
                               child: Text(
-                                "Open the view link. Permission to share the screen will then be requested.",
+                                "Open the view link to see the screen's output. Permission to share the screen must be granted.",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: Colors.white, fontSize: 20),

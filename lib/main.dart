@@ -1,5 +1,8 @@
 import 'dart:core';
 
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
+
 import 'package:vdo_ninja/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,21 +15,38 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock/wakelock.dart';
 import 'package:flutter_background/flutter_background.dart';
 
-void main() => runApp(new MyApp());
 
-var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
-Random _rnd = Random();
+void main() {
+	
+  if (WebRTC.platformIsDesktop) {
+    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+  } else if (WebRTC.platformIsAndroid) {
+    WidgetsFlutterBinding.ensureInitialized();
+    startForegroundService();
+  }
+  runApp(MyApp());
+}
 
-String getRandomString(int length) => String.fromCharCodes(Iterable.generate(
-    length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
-var streamID = getRandomString(8);
+Future<bool> startForegroundService() async {
+  final androidConfig = FlutterBackgroundAndroidConfig(
+    notificationTitle: 'Title of the notification',
+    notificationText: 'Text of the notification',
+    notificationImportance: AndroidNotificationImportance.Default,
+    notificationIcon: AndroidResource(
+        name: 'background_icon',
+        defType: 'drawable'), // Default is ic_launcher from folder mipmap
+  );
+  await FlutterBackground.initialize(androidConfig: androidConfig);
+  return FlutterBackground.enableBackgroundExecution();
+}
 
 class MyApp extends StatefulWidget {
   @override
   _MyAppState createState() => new _MyAppState();
 }
 
-
+String streamID = "";
+int val = 1;
 
 enum DialogDemoAction {
   cancel,
@@ -36,8 +56,8 @@ enum DialogDemoAction {
 class _MyAppState extends State<MyApp> {
   List<RouteItem> items;
   SharedPreferences _prefs;
-
-  var _screenShare = "screen";
+  
+  var _deviceID = "screen";
   List<Color> colors = [
     Color(0xFFA53E97),
     Color(0xFF645098),
@@ -138,7 +158,19 @@ class _MyAppState extends State<MyApp> {
   }
 
   _initData() async {
+  
     _prefs = await SharedPreferences.getInstance();
+
+	streamID = _prefs.getString('streamID') ?? "";
+	
+	if (streamID==""){
+		var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
+		Random _rnd = Random();
+		String getRandomString(int length) => String.fromCharCodes(Iterable.generate(length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
+		streamID = getRandomString(8);
+		_prefs.setString('streamID', streamID);
+	}
+	val = _prefs.getInt('resolution') ?? 1;
 
     setState(() {
       Wakelock.enable();
@@ -146,8 +178,8 @@ class _MyAppState extends State<MyApp> {
     });
 	
 	final androidConfig = FlutterBackgroundAndroidConfig(
-		notificationTitle: "flutter_background example app",
-		notificationText: "Background notification for keeping the example app running in the background",
+		notificationTitle: "VDO.Ninja",
+		notificationText: "Background notification for keeping the VDO.Ninja app running in the background",
 		notificationImportance: AndroidNotificationImportance.Default,
 		notificationIcon: AndroidResource(name: 'background_icon', defType: 'drawable'), // Default is ic_launcher from folder mipmap
 	);
@@ -166,28 +198,71 @@ class _MyAppState extends State<MyApp> {
               context,
               MaterialPageRoute(
                   builder: (BuildContext context) => CallSample(
-                      streamID: streamID, screenShare: _screenShare)));
+                      streamID: streamID, deviceID: _deviceID)));
         }
       }
     });
   }
-
+  
   _showAddressDialog(context) {
+  
     showDemoDialog<DialogDemoAction>(
         context: context,
         child: AlertDialog(
             title: const Text('Stream ID:'),
-            content: TextField(
-              onChanged: (String text) {
-                setState(() {
-                  streamID = text;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: streamID,
-              ),
-              textAlign: TextAlign.center,
-            ),
+            content: Stack(children: [
+				Padding(
+				  padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+				  child: TextField(
+					onChanged: (String text) {
+						setState(() {
+						  streamID = text;
+						  _prefs.setString('streamID', streamID);
+						});
+					  },
+					  decoration: InputDecoration(
+						hintText: streamID,
+					  ),
+					  textAlign: TextAlign.center,
+					),
+				),
+				Padding(
+					padding: const EdgeInsets.fromLTRB(0, 70, 0, 0),
+					child: 
+					  ListTile(
+						title: Text("1080p"),
+						leading: Radio(
+						  value: 2,
+						  groupValue: val,
+						  onChanged: (int value) {
+							setState(() {
+							  val = value;
+							  _prefs.setInt('resolution', val);
+							});
+						  },
+						  activeColor: Colors.green,
+						),
+					  ),
+				),
+				Padding(
+					padding: const EdgeInsets.fromLTRB(0, 100, 0, 0),
+					child: 
+					  ListTile(
+						title: Text("720p"),
+						leading: Radio(
+						  value: 1,
+						  groupValue: val,
+						  onChanged: (int value) {
+							setState(() {
+							  val = value;
+							   _prefs.setInt('resolution', val);
+							});
+						  },
+						  activeColor: Colors.green,
+						),
+					  ),
+				),
+			]),
             actions: <Widget>[
               TextButton(
                   child: const Text('CANCEL'),
@@ -210,7 +285,7 @@ class _MyAppState extends State<MyApp> {
         subtitle: 'Share your device\'s screen',
         icon: Icons.screen_share,
         push: (BuildContext context) {
-          _screenShare = "screen";
+          _deviceID = "screen";
           _showAddressDialog(context);
         }));
 
@@ -222,25 +297,42 @@ class _MyAppState extends State<MyApp> {
 
       var cameraType = "Camera";
 
-      if (item.label.contains('back')) {
+      if (item.label.toLowerCase().contains('back')) {
         cameraType = 'Back Camera';
-      }
-
-      if (item.label.contains('front')) {
+      } else if (item.label.toLowerCase().contains('rear')) {
+        cameraType = 'Back Camera';
+      } else if (item.label.toLowerCase().contains('user')) {
         cameraType = 'Front Camera';
-      }
-
-      items.add(RouteItem(
+      } else if (item.label.toLowerCase().contains('front')) {
+        cameraType = 'Front Camera';
+      } else if (item.label.toLowerCase().contains('environment')) {
+        cameraType = 'Rear Camera';
+      } else if (item.label is String){
+		cameraType = item.label;
+	  } 
+	  
+	   items.add(RouteItem(
           title: cameraType.toUpperCase(),
-          subtitle:
-              item.label.toString(),
-          icon: item.label.contains('back')
-              ? Icons.video_camera_back
-              : Icons.video_camera_front,
+          subtitle: item.label.toString(),
+          icon: item.label.toLowerCase().contains('front') || item.label.toLowerCase().contains('user')
+              ? Icons.video_camera_front
+              : Icons.video_camera_back,
           push: (BuildContext context) {
-            _screenShare = item.deviceId;
+            _deviceID = item.deviceId;
             _showAddressDialog(context);
-          }));
+      }));
+	  
+	  if (item.label.contains('front')) {
+          cameraType = 'Camera + Screen';
+		  items.add(RouteItem(
+			  title: cameraType.toUpperCase(),
+			  subtitle: item.label.toString(),
+			  icon: Icons.auto_awesome_mosaic,
+			  push: (BuildContext context) {
+				_deviceID = "screen_"+item.deviceId;
+				_showAddressDialog(context);
+		  }));
+	  }
     }
 
     setState(() {});

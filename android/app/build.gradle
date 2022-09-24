@@ -11,33 +11,33 @@ if (flutterRoot == null) {
     throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
 }
 
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
+def flutteVersionName = localProperties.getProperty('flutter.versionName')
+if (flutteVersionName == null) {flutteVersionName = '1.0.0'}
 
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {flutterVersionCode = 1}
+
 
 apply plugin: 'com.android.application'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
-android {
-    compileSdkVersion 28
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+   keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
 
-    lintOptions {
-        disable 'InvalidPackage'
-    }
+
+android {
+    compileSdkVersion 31
+
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.cloudwebrtc.flutterwebrtcdemo"
+        applicationId "flutter.vdo.ninja"
         minSdkVersion 21 
-        targetSdkVersion 28
+        targetSdkVersion 31
         versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        versionName flutteVersionName
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
 
@@ -46,17 +46,28 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
-            useProguard true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+
+	signingConfigs {
+		release {
+		   keyAlias keystoreProperties['keyAlias']
+		   keyPassword keystoreProperties['keyPassword']
+		   storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+		   storePassword keystoreProperties['storePassword']
+		}
+	}
+	buildTypes {
+	    release {
+		   signingConfig signingConfigs.release
+		   proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+	    }
+	}
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/proguard/androidx-annotations.pro']
         }
     }
-    packagingOptions {
-        exclude 'META-INF/proguard/androidx-annotations.pro'
+    lint {
+        disable 'InvalidPackage'
     }
 }
 
