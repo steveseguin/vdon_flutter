@@ -1,14 +1,10 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-
-import 'random_string.dart';
-
 import '../utils/device_info.dart'
     if (dart.library.js) '../utils/device_info_web.dart';
 import '../utils/websocket.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
-
 
 enum SignalingState {
   ConnectionOpen,
@@ -31,27 +27,30 @@ typedef void SignalingStateCallback(SignalingState state);
 typedef void CallStateCallback(CallState state);
 typedef void StreamStateCallback(MediaStream stream);
 typedef void OtherEventCallback(dynamic event);
-typedef void DataChannelMessageCallback(RTCDataChannel dc, RTCDataChannelMessage data);
+typedef void DataChannelMessageCallback(
+    RTCDataChannel dc, RTCDataChannelMessage data);
 typedef void DataChannelCallback(RTCDataChannel dc);
 
 class Signaling {
-	
-	
-	
   var streamID = "";
   var deviceID = "screen";
-  
-  Signaling(_streamID, _deviceID){ // INIT CLASS
-	this.streamID = _streamID;
-	this.deviceID = _deviceID;
-  }	  
-  
+  var roomID = "";
+  var quality = false;
+
+  Signaling(_streamID, _deviceID, _roomID, _quality) {
+    // INIT CLASS
+    this.streamID = _streamID;
+    this.deviceID = _deviceID;
+    this.roomID = _roomID;
+    this.quality = _quality;
+  }
+
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
   SimpleWebSocket _socket;
   var _port = 443;
   var _sessions = {};
-  
+
   MediaStream _localStream;
   List<MediaStream> _remoteStreams = <MediaStream>[];
 
@@ -67,8 +66,7 @@ class Signaling {
   String get sdpSemantics => 'unified-plan';
 
   Map<String, dynamic> configuration = {
-	'sdpSemantics': "unified-plan",
-	
+    'sdpSemantics': "unified-plan",
     'iceServers': [
       {'url': 'stun:stun.l.google.com:19302'},
       {
@@ -101,8 +99,8 @@ class Signaling {
 
   close() async {
     _cleanSessions();
-    //_localStream = null;
-    //_remoteStreams = null;
+    _localStream = null;
+    _remoteStreams = null;
   }
 
   MediaStream getLocalStream() {
@@ -116,18 +114,25 @@ class Signaling {
       Helper.switchCamera(_localStream.getVideoTracks()[0]);
     }
   }
-  void toggleTorch(torch) async {
+
+  toggleTorch(torch) async {
     if (_localStream != null) {
-		final videoTrack = _localStream.getVideoTracks().firstWhere((track) => track.kind == "video");
-		final has = await videoTrack.hasTorch();
-		if (has) {
-		  await videoTrack.setTorch(torch);
-		} else {
-		  print("[TORCH] Current camera does not support torch mode");
-		}
-	}
+      final videoTrack = _localStream.getVideoTracks().firstWhere((track) => track.kind == "video");
+
+        try {
+          if (await videoTrack.hasTorch()){
+            await videoTrack.setTorch(torch);
+            return true;
+          } else {
+             print("[TORCH] Current camera does not support torch mode");
+          }
+        } catch(e){
+           print("[TORCH] Current camera does not support torch mode 2");
+        }
+    }
+     return false;
   }
-  
+
   void muteMic() {
     if (_localStream != null) {
       bool enabled = _localStream.getAudioTracks()[0].enabled;
@@ -146,7 +151,7 @@ class Signaling {
 
     if (mapData['request'] == "offerSDP") {
       var uuid = mapData['UUID'];
-    
+
       RTCPeerConnection pc = await createPeerConnection(configuration, _config);
 
       _sessions[uuid] = pc;
@@ -161,22 +166,23 @@ class Signaling {
         pc.addTrack(track, _localStream);
       });
 
-       pc.onIceCandidate = (candidate) async {
-		  if (candidate == null) {
-			print('onIceCandidate: complete!');
-			return;
-		  }
+      pc.onIceCandidate = (candidate) async {
+        if (candidate == null) {
+          print('onIceCandidate: complete!');
+          return;
+        }
 
         var request = Map();
         request["UUID"] = uuid;
         request["candidate"] = {
-         // 'sdpMLineIndex': candidate.sdpMlineIndex,
+          // 'sdpMLineIndex': candidate.sdpMlineIndex,
           'sdpMid': candidate.sdpMid,
           'candidate': candidate.candidate
         };
         request["type"] = "local";
         request["session"] = 'xxxx';
         request["streamID"] = streamID;
+        // request["roomID"] = roomID;
         _socket.send(_encoder.convert(request));
       };
 
@@ -226,15 +232,14 @@ class Signaling {
   }
 
   Future<void> connect() async {
-	  
-	if (_localStream == null) {
-        _localStream = await createStream(true, deviceID);
+    if (_localStream == null) {
+      _localStream = await createStream(true, deviceID);
     } else {
-        _sessions.forEach((key, sess) async {
-          await sess.close();
-        });
+      _sessions.forEach((key, sess) async {
+        await sess.close();
+      });
     }
-	  
+
     _socket = SimpleWebSocket();
 
     _socket.onOpen = () {
@@ -245,6 +250,13 @@ class Signaling {
       request["request"] = "seed";
       request["streamID"] = streamID;
       _socket.send(_encoder.convert(request));
+
+      if (roomID != "") {
+        var request = Map();
+        request["request"] = "joinroom";
+        request["roomid"] = roomID;
+        _socket.send(_encoder.convert(request));
+      }
     };
 
     _socket.onMessage = (message) {
@@ -262,98 +274,163 @@ class Signaling {
 
   Future<MediaStream> createStream(bool userScreen, String deviceID) async {
     MediaStream stream;
-	
+
+    String width = "1280";
+    String height = "720";
+
+    if (quality){
+      width = "1920";
+      height = "1080";
+    }
+
     if (deviceID == "screen") {
-		
-      stream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
-	
-	  if (stream.getAudioTracks().length==0){
-			MediaStream audioStream = await navigator.mediaDevices.getUserMedia(
-				{'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false,
-					'noiseSuppression': false,
-					'autoGainControl': false
-				}}});
-			audioStream.getAudioTracks().forEach((element) async {
-				await stream.addTrack(element); 
-            });
-		}
-    } else if (deviceID == "front" || deviceID.contains("1") || deviceID == "user" ) {
-      stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false
-				}},
-        'video': {'facingMode': 'user', 'mandatory': {
-					  'minWidth': '1920',
-					  'minHeight': '1080',
-					  'minFrameRate': '60'
-					}}
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'facingMode': 'user',
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'minFrameRate': '60'
+          }
+        }
       });
-    } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
+      if (stream.getAudioTracks().length == 0) {
+        MediaStream audioStream = await navigator.mediaDevices.getUserMedia({
+          'audio': {
+            'mandatory': {
+              'googEchoCancellation': false,
+              'echoCancellation': false,
+              'noiseSuppression': false,
+              'autoGainControl': false
+            }
+          }
+        });
+        audioStream.getAudioTracks().forEach((element) async {
+          await stream.addTrack(element);
+        });
+      }
+    } else if (deviceID == "front" ||
+        deviceID.contains("1") ||
+        deviceID == "user") {
       stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false
-				}},
-        'video': {'facingMode': 'environment', 'mandatory': {
-					  'minWidth': '1920',
-					  'minHeight': '1080',
-					  'minFrameRate': '60'
-					}}
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'facingMode': 'user',
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'minFrameRate': '60'
+          }
+        }
       });
-	 } else if (deviceID.startsWith("screen_")){
-		 var cameraID = deviceID.split("screen_")[1];
-		 
-		 if (cameraID == "front" || deviceID.contains("1") || deviceID == "user") {
-		  stream = await navigator.mediaDevices.getUserMedia({
-			'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false
-				}},
-			'video': {'facingMode': 'user', 'mandatory': {
-					  'minWidth': '1920',
-					  'minHeight': '1080',
-					  'minFrameRate': '60'
-					}}
-		  });
-		 } else {
-			stream = await navigator.mediaDevices.getUserMedia({
-				'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false
-				}},
-				'video': {
-					'deviceId': cameraID, 
-					'mandatory': {
-					  'minWidth': '1920',
-					  'minHeight': '1080',
-					  'minFrameRate': '60'
-					}
-				}
-			});
-		 }
-		 MediaStream screenStream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
-		 screenStream.getVideoTracks().forEach((element) async {
-			await stream.addTrack(element); 
-		});
-		 
+    } else if (deviceID == "rear" ||
+        deviceID == "environment" ||
+        deviceID.contains("0")) {
+      stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'facingMode': 'environment',
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'minFrameRate': '60'
+          }
+        }
+      });
+    } else if (deviceID.startsWith("screen_")) {
+      var cameraID = deviceID.split("screen_")[1];
+
+      if (cameraID == "front" || deviceID.contains("1") || deviceID == "user") {
+        stream = await navigator.mediaDevices.getUserMedia({
+          'audio': {
+            'mandatory': {
+              'googEchoCancellation': false,
+              'echoCancellation': false
+            }
+          },
+          'video': {
+            'facingMode': 'user',
+            'mandatory': {
+              'minWidth': width,
+              'minHeight': height,
+              'minFrameRate': '60'
+            }
+          }
+        });
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({
+          'audio': {
+            'mandatory': {
+              'googEchoCancellation': false,
+              'echoCancellation': false
+            }
+          },
+          'video': {
+            'deviceId': cameraID,
+            'mandatory': {
+              'minWidth': width,
+              'minHeight': height,
+              'minFrameRate': '60'
+            }
+          }
+        });
+      }
+      MediaStream screenStream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
+      screenStream.getVideoTracks().forEach((element) async {
+        await stream.addTrack(element);
+      });
     } else {
       //var devices =  await navigator.mediaDevices.enumerateDevices();
       stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {'mandatory': {
-					'googEchoCancellation': false,
-					'echoCancellation': false
-				}},
-        'video': {'deviceId': deviceID, 'mandatory': {
-					  'minWidth': '1920',
-					  'minHeight': '1080',
-					  'minFrameRate': '60'
-					}}
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'deviceId': deviceID,
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'minFrameRate': '60'
+          }
+        }
       });
     }
 
+    print({
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'deviceId': deviceID,
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'minFrameRate': '60'
+          }
+        }
+      });
 
     onLocalStream?.call(stream);
     return stream;

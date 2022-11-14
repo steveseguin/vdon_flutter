@@ -9,6 +9,8 @@ class CallSample extends StatefulWidget {
 
   final String streamID;
   final String deviceID;
+  final String roomID;
+  final bool quality;
   final bool preview;
   final bool muted;
   final bool mirrored;
@@ -17,6 +19,8 @@ class CallSample extends StatefulWidget {
       {Key key,
       @required this.streamID,
       @required this.deviceID,
+      @required this.roomID,
+      @required this.quality,
       this.preview,
       this.muted,
       this.mirrored})
@@ -62,10 +66,9 @@ class _CallSampleState extends State<CallSample> {
   }
 
   void _connect() async {
-
     if (_signaling == null) {
-      _signaling = Signaling(widget.streamID, widget.deviceID);
-	  _signaling.connect();
+      _signaling = Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality);
+      _signaling.connect();
 
       _signaling.onSignalingStateChange = (SignalingState state) {
         switch (state) {
@@ -128,19 +131,31 @@ class _CallSampleState extends State<CallSample> {
 
   _hangUp() {
     _inCalling = false;
-    _signaling.close();
+
+    if (_signaling != null) _signaling.close();
+    _localRenderer.dispose();
+    _remoteRenderer.dispose();
+
+    _localRenderer.srcObject = null;
+    _remoteRenderer.srcObject = null;
     Navigator.of(context).pop();
   }
 
   _switchCamera() {
     _signaling.switchCamera();
+    
   }
 
-  _toggleFlashlight(){
-	   setState(() {
-		  torch = !torch;
-		});
-		_signaling.toggleTorch(torch);
+  _toggleFlashlight() async {
+    setState(() {
+      torch = !torch;
+    });
+    bool success = await _signaling.toggleTorch(torch);
+    if (!success){
+        setState(() {
+          torch = false;
+        });
+    }
   }
 
   _toggleMic() {
@@ -187,34 +202,40 @@ class _CallSampleState extends State<CallSample> {
 
   @override
   Widget build(BuildContext context) {
-    final vdonLink = "https://vdo.ninja/?view=" + widget.streamID + "&password=false";
+    String tmp = "https://vdo.ninja/?v=" + widget.streamID + "&p=0";
+    if (widget.roomID != "") {
+      tmp = "https://vdo.ninja/?v=" +
+          widget.streamID +
+          "&r=" +
+          widget.roomID +
+          "&scn&p=0";
+    }
+    final vdonLink = tmp;
     final key = new GlobalKey<ScaffoldState>();
 
     Widget callControls() {
       double buttonWidth = 60;
       List<Widget> buttons = [];
 
-	   buttons.add(RawMaterialButton(
-          constraints: BoxConstraints(minWidth: buttonWidth),
-          visualDensity: VisualDensity.comfortable,
-          onPressed: () => {_toggleMic()},
-          fillColor: muted ? Colors.red : Colors.green,
-          child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
-          shape: CircleBorder(),
-          elevation: 2,
-          padding: EdgeInsets.all(15),
-        ));
-
+      buttons.add(RawMaterialButton(
+        constraints: BoxConstraints(minWidth: buttonWidth),
+        visualDensity: VisualDensity.comfortable,
+        onPressed: () => {_toggleMic()},
+        fillColor: muted ? Colors.red : Colors.green,
+        child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
+        shape: CircleBorder(),
+        elevation: 2,
+        padding: EdgeInsets.all(15),
+      ));
 
       if (widget.deviceID != 'screen') {
-
-
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_togglePreview()},
           fillColor: preview ? Colors.green : Colors.red,
-          child: preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
+          child:
+              preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
           shape: CircleBorder(),
           elevation: 2,
           padding: EdgeInsets.all(15),
@@ -242,18 +263,17 @@ class _CallSampleState extends State<CallSample> {
           padding: EdgeInsets.all(15),
         ));
 
-
-		 buttons.add(RawMaterialButton(
-		  constraints: BoxConstraints(minWidth: buttonWidth),
-		  visualDensity: VisualDensity.comfortable,
-		  onPressed: () => {_toggleFlashlight()},
-		  fillColor: !torch ? Theme.of(context).buttonColor : Colors.green,
-		  child: !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
-		  shape: CircleBorder(),
-		  elevation: 2,
-		  padding: EdgeInsets.all(15),
-		));
-
+        buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: () => {_toggleFlashlight()},
+          fillColor: !torch ? Theme.of(context).buttonColor : Colors.green,
+          child:
+              !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(15),
+        ));
       }
 
       buttons.add(RawMaterialButton(
