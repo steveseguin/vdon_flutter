@@ -69,6 +69,7 @@ android {
     lint {
         disable 'InvalidPackage'
     }
+    namespace 'com.cloudwebrtc.flutterwebrtcdemo'
 }
 
 flutter {
