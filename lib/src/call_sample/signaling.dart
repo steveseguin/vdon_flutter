@@ -117,20 +117,22 @@ class Signaling {
 
   toggleTorch(torch) async {
     if (_localStream != null) {
-      final videoTrack = _localStream.getVideoTracks().firstWhere((track) => track.kind == "video");
+      final videoTrack = _localStream
+          .getVideoTracks()
+          .firstWhere((track) => track.kind == "video");
 
-        try {
-          if (await videoTrack.hasTorch()){
-            await videoTrack.setTorch(torch);
-            return true;
-          } else {
-             print("[TORCH] Current camera does not support torch mode");
-          }
-        } catch(e){
-           print("[TORCH] Current camera does not support torch mode 2");
+      try {
+        if (await videoTrack.hasTorch()) {
+          await videoTrack.setTorch(torch);
+          return true;
+        } else {
+          print("[TORCH] Current camera does not support torch mode");
         }
+      } catch (e) {
+        print("[TORCH] Current camera does not support torch mode 2");
+      }
     }
-     return false;
+    return false;
   }
 
   void muteMic() {
@@ -267,6 +269,7 @@ class Signaling {
     _socket.onClose = (int code, String reason) {
       print('Closed by server [$code => $reason]!');
       onSignalingStateChange?.call(SignalingState.ConnectionClosed);
+      _socket.connect(streamID);
     };
 
     await _socket.connect(streamID);
@@ -278,7 +281,7 @@ class Signaling {
     String width = "1280";
     String height = "720";
 
-    if (quality){
+    if (quality) {
       width = "1920";
       height = "1080";
     }
@@ -391,7 +394,8 @@ class Signaling {
           }
         });
       }
-      MediaStream screenStream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
+      MediaStream screenStream = await navigator.mediaDevices
+          .getDisplayMedia({'audio': true, 'video': true});
       screenStream.getVideoTracks().forEach((element) async {
         await stream.addTrack(element);
       });
@@ -416,21 +420,18 @@ class Signaling {
     }
 
     print({
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': {
-          'deviceId': deviceID,
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-            'minFrameRate': '60'
-          }
+      'audio': {
+        'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+      },
+      'video': {
+        'deviceId': deviceID,
+        'mandatory': {
+          'minWidth': width,
+          'minHeight': height,
+          'minFrameRate': '60'
         }
-      });
+      }
+    });
 
     onLocalStream?.call(stream);
     return stream;

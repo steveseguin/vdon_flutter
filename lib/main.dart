@@ -1,6 +1,7 @@
 import 'dart:core';
 
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 
 import 'package:vdo_ninja/theme.dart';
 import 'package:flutter/material.dart';
@@ -108,45 +109,44 @@ class _MyAppState extends State<MyApp> {
           title: Text('VDO.Ninja'),
         ),
         body: Container(
-            child: Stack(children: [
-              SingleChildScrollView(
+            child: Stack(
+          children: [
+            SingleChildScrollView(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(30, 25, 0, 0),
-                      child: Container(
-                        width: double.infinity,
-                        child: Text(
-                          "Share",
-                          textAlign: TextAlign.left,
-                          style: theme.textTheme.headline1.apply(
-                              color: Colors.white,
-                              fontWeightDelta: 10,
-                              fontSizeFactor: 1.5),
-                        ),
-                      ),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(30, 25, 0, 0),
+                  child: Container(
+                    width: double.infinity,
+                    child: Text(
+                      "Share",
+                      textAlign: TextAlign.left,
+                      style: theme.textTheme.headline1.apply(
+                          color: Colors.white,
+                          fontWeightDelta: 10,
+                          fontSizeFactor: 1.5),
                     ),
-                    ListView.builder(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.all(8.0),
-                        itemCount: items.length,
-                        itemBuilder: (context, i) {
-                          return _buildRow(context, items[i], i);
-                        }),
-                    Align(
-                      alignment: FractionalOffset.bottomCenter,
-                        child: TextButton.icon(
-                          icon: Icon(Icons.help_center),
-                          style: Theme.of(context).elevatedButtonTheme.style,
-                          onPressed: () => {_openDiscord()},
-                          label: Text("Need help? Join our Discord.")
-                        ),
-                      ),
-                  ],
-                )
-               ),
-            ],
+                  ),
+                ),
+                ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.all(8.0),
+                    itemCount: items.length,
+                    itemBuilder: (context, i) {
+                      return _buildRow(context, items[i], i);
+                    }),
+                Align(
+                  alignment: FractionalOffset.bottomCenter,
+                  child: TextButton.icon(
+                      icon: Icon(Icons.help_center),
+                      style: Theme.of(context).elevatedButtonTheme.style,
+                      onPressed: () => {_openDiscord()},
+                      label: Text("Need help? Join our Discord.")),
+                ),
+              ],
+            )),
+          ],
         )),
       ),
     );
@@ -158,7 +158,10 @@ class _MyAppState extends State<MyApp> {
     streamID = _prefs.getString('streamID') ?? "";
     roomID = _prefs.getString('roomID') ?? "";
     password = _prefs.getString('password') ?? "";
-    quality = _prefs.getBool('resolution') ?? false;
+
+    try {
+      quality = _prefs.getBool('resolution') ?? false;
+    } catch (e) {}
 
     if (streamID == "") {
       var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
@@ -177,8 +180,7 @@ class _MyAppState extends State<MyApp> {
 
     final androidConfig = FlutterBackgroundAndroidConfig(
       notificationTitle: "VDO.Ninja",
-      notificationText:
-          "Background notification for keeping the VDO.Ninja app running in the background",
+      notificationText: "VDO.Ninja is running in the background",
       notificationImportance: AndroidNotificationImportance.Default,
       notificationIcon: AndroidResource(
           name: 'background_icon',
@@ -199,18 +201,16 @@ class _MyAppState extends State<MyApp> {
               context,
               MaterialPageRoute(
                   builder: (BuildContext context) => CallSample(
-                      streamID: streamID,
-                      deviceID: _deviceID,
-                      roomID: roomID,
-                      quality: quality,
-                    )
-                  )
-                );
+                        streamID: streamID,
+                        deviceID: _deviceID,
+                        roomID: roomID,
+                        quality: quality,
+                      )));
         }
       }
     });
   }
-  
+
   _showAddressDialog(context) {
     showDemoDialog<DialogDemoAction>(
         context: context,
@@ -236,6 +236,7 @@ class _MyAppState extends State<MyApp> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 70, 0, 0),
                 child: TextField(
+                  controller: TextEditingController()..text = roomID ?? "",
                   onChanged: (String text) {
                     setState(() {
                       roomID = text;
@@ -252,17 +253,16 @@ class _MyAppState extends State<MyApp> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 150, 0, 0),
                 child: SwitchListTile(
-                  title: const Text('Prefer 1080p'),
-                  value: quality,
-                  onChanged: (bool value) {
-                    _prefs.setBool('resolution', value);
-                    setState(() {
-                      quality = value;
-                      Navigator.pop(context);
-                      _showAddressDialog(context);
-                    });
-                  }
-                ),
+                    title: const Text('Prefer 1080p'),
+                    value: quality,
+                    onChanged: (bool value) {
+                      _prefs.setBool('resolution', value);
+                      setState(() {
+                        quality = value;
+                        Navigator.pop(context);
+                        _showAddressDialog(context);
+                      });
+                    }),
               ),
               //     Padding(
               //        padding: const EdgeInsets.fromLTRB(0, 130, 0, 0),
@@ -309,14 +309,13 @@ class _MyAppState extends State<MyApp> {
     items = <RouteItem>[];
 
     items.add(RouteItem(
-      title: 'SCREEN',
-      subtitle: 'Share your device\'s screen',
-      icon: Icons.screen_share,
-      push: (BuildContext context) {
-        _deviceID = "screen";
-        _showAddressDialog(context);
-      }
-    ));
+        title: 'SCREEN',
+        subtitle: 'Share your device\'s screen',
+        icon: Icons.screen_share,
+        push: (BuildContext context) {
+          _deviceID = "screen";
+          _showAddressDialog(context);
+        }));
 
     var devices = await navigator.mediaDevices.enumerateDevices();
     for (var item in devices) {
