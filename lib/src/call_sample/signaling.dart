@@ -27,8 +27,7 @@ typedef void SignalingStateCallback(SignalingState state);
 typedef void CallStateCallback(CallState state);
 typedef void StreamStateCallback(MediaStream stream);
 typedef void OtherEventCallback(dynamic event);
-typedef void DataChannelMessageCallback(
-    RTCDataChannel dc, RTCDataChannelMessage data);
+typedef void DataChannelMessageCallback(RTCDataChannel dc, RTCDataChannelMessage data);
 typedef void DataChannelCallback(RTCDataChannel dc);
 
 class Signaling {
@@ -36,6 +35,8 @@ class Signaling {
   var deviceID = "screen";
   var roomID = "";
   var quality = false;
+  var active = false;
+  
 
   Signaling(_streamID, _deviceID, _roomID, _quality) {
     // INIT CLASS
@@ -50,6 +51,8 @@ class Signaling {
   SimpleWebSocket _socket;
   var _port = 443;
   var _sessions = {};
+  var _sessionID = {};
+
 
   MediaStream _localStream;
   List<MediaStream> _remoteStreams = <MediaStream>[];
@@ -155,8 +158,9 @@ class Signaling {
       var uuid = mapData['UUID'];
 
       RTCPeerConnection pc = await createPeerConnection(configuration, _config);
-
+      _sessionID[uuid] = new DateTime.now().toString();
       _sessions[uuid] = pc;
+      
 
       pc.onTrack = (event) {
         if (event.track.kind == 'video') {
@@ -182,7 +186,7 @@ class Signaling {
           'candidate': candidate.candidate
         };
         request["type"] = "local";
-        request["session"] = 'xxxx';
+        request["session"] = _sessionID[uuid];
         request["streamID"] = streamID;
         // request["roomID"] = roomID;
         _socket.send(_encoder.convert(request));
@@ -242,6 +246,8 @@ class Signaling {
       });
     }
 
+    active=true;
+
     _socket = SimpleWebSocket();
 
     _socket.onOpen = () {
@@ -269,7 +275,9 @@ class Signaling {
     _socket.onClose = (int code, String reason) {
       print('Closed by server [$code => $reason]!');
       onSignalingStateChange?.call(SignalingState.ConnectionClosed);
-      _socket.connect(streamID);
+      if (active==true){
+        _socket.connect(streamID);
+      }
     };
 
     await _socket.connect(streamID);
@@ -394,8 +402,7 @@ class Signaling {
           }
         });
       }
-      MediaStream screenStream = await navigator.mediaDevices
-          .getDisplayMedia({'audio': true, 'video': true});
+      MediaStream screenStream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
       screenStream.getVideoTracks().forEach((element) async {
         await stream.addTrack(element);
       });
@@ -456,14 +463,13 @@ class Signaling {
   Future<void> _createOffer(String uuid) async {
     print("CREATE OFFER");
     try {
-      RTCSessionDescription s =
-          await _sessions[uuid].createOffer(_dcConstraints);
+      RTCSessionDescription s = await _sessions[uuid].createOffer(_dcConstraints);
       await _sessions[uuid].setLocalDescription(s);
 
       var request = Map();
       request["UUID"] = uuid;
       request["description"] = {'sdp': s.sdp, 'type': s.type};
-      request["session"] = 'xxxx';
+      request["session"] = _sessionID[uuid];
       request["streamID"] = streamID;
       _socket.send(_encoder.convert(request));
     } catch (e) {
@@ -479,7 +485,7 @@ class Signaling {
       var request = Map();
       request["UUID"] = uuid;
       request["description"] = {'sdp': s.sdp, 'type': s.type};
-      request["session"] = 'xxxx';
+      request["session"] = _sessionID[uuid];
       request["streamID"] = streamID;
       _socket.send(_encoder.convert(request));
     } catch (e) {
@@ -488,15 +494,24 @@ class Signaling {
   }
 
   Future<void> _cleanSessions() async {
+    active=false;
+
     if (_localStream != null) {
       _localStream.getTracks().forEach((element) async {
         await element.stop();
-      });
+      }); 
+    }  
+    if (_localStream != null) {
       await _localStream.dispose();
       _localStream = null;
     }
     _sessions.forEach((key, sess) async {
+       var request = Map();
+      request["UUID"] = key;
+      request["bye"] = true;
+      await _socket.send(_encoder.convert(request));
       await sess.close();
+      //await sess.dispose();
     });
 
     // Close the websocket connection so the viewer doesn't auto-reconnect.
