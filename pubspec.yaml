@@ -20,7 +20,7 @@ dependencies:
   url_launcher: ^6.0.12
   flutter_background:
     git:
-      url: flutter_background
+      url: https://github.com/JulianAssmann/flutter_background
       ref: master    
 
 dev_dependencies:
