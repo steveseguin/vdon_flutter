@@ -15,14 +15,23 @@ class SimpleWebSocket {
     SimpleWebSocket();
 	JsonEncoder _encoder = JsonEncoder();
 
-    connect(streamID) async {
+    connect(streamID, WSSADDRESS, UUID) async {
 		print("CONNECTING");
         try {
-            _socket = await WebSocket.connect("wss://wss.vdo.ninja:443");
+			if (WSSADDRESS.startsWith("wss://")){
+				_socket = await WebSocket.connect(WSSADDRESS);
+			} else {
+				_socket = await WebSocket.connect("wss://"+WSSADDRESS);
+			}
 			
 			var request = Map();
 			request["request"] = "seed";
 			request["streamID"] = streamID;
+			
+			if (!UUID.isEmpty){
+			  request["from"] = UUID;
+			}
+			
 			_socket.add(_encoder.convert(request));
 			
             onOpen?.call();

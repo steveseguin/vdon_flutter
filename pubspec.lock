@@ -91,10 +91,10 @@ packages:
     description:
       path: "."
       ref: master
-      resolved-ref: fc754beb638fa96cf72a443be016610494e83564
-      url: flutter_background
+      resolved-ref: d1ca4140ce43ad4e85545eb474ed70d8574996f3
+      url: "https://github.com/JulianAssmann/flutter_background"
     source: git
-    version: "1.1.0"
+    version: "1.2.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter

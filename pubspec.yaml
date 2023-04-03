@@ -1,7 +1,7 @@
 name: vdo_ninja
 description: Simple capture app for VDO.NInja
-version: 5.0.7+7
-versionCode: 7
+version: 5.0.8+8
+versionCode: 8
 
 environment:
   sdk: ">=2.2.2 <3.0.0"

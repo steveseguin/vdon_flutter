@@ -10,6 +10,7 @@ class CallSample extends StatefulWidget {
   final String streamID;
   final String deviceID;
   final String roomID;
+  final String WSSADDRESS;
   final bool quality;
   final bool preview;
   final bool muted;
@@ -21,6 +22,7 @@ class CallSample extends StatefulWidget {
       @required this.deviceID,
       @required this.roomID,
       @required this.quality,
+	  @required this.WSSADDRESS,
       this.preview,
       this.muted,
       this.mirrored})
@@ -67,7 +69,7 @@ class _CallSampleState extends State<CallSample> {
 
   void _connect() async {
     if (_signaling == null) {
-      _signaling = Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality);
+      _signaling = Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS);
       _signaling.connect();
 
       _signaling.onSignalingStateChange = (SignalingState state) {
@@ -210,6 +212,10 @@ class _CallSampleState extends State<CallSample> {
           widget.roomID +
           "&scn&p=0";
     }
+	
+	if ( widget.WSSADDRESS != 'wss://wss.vdo.ninja:443')
+		tmp = tmp + "&wss=" + Uri.encodeComponent(widget.WSSADDRESS.replaceAll("wss://",""));
+	
     final vdonLink = tmp;
     final key = new GlobalKey<ScaffoldState>();
 
@@ -228,7 +234,9 @@ class _CallSampleState extends State<CallSample> {
         padding: EdgeInsets.all(15),
       ));
 
-      if (widget.deviceID != 'screen') {
+	  if (widget.deviceID == 'microphone') { 
+		//
+      } else if (widget.deviceID != 'screen') {
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
@@ -324,12 +332,31 @@ class _CallSampleState extends State<CallSample> {
             Expanded(
               child: Stack(alignment: Alignment.bottomCenter, children: [
                 widget.deviceID != 'screen'
-                    ? RTCVideoView(
-                        _localRenderer,
-                        objectFit:
-                            RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                        mirror: mirrored,
-                      )
+                    ? widget.deviceID != 'microphone'
+						? RTCVideoView(
+							_localRenderer,
+							objectFit:
+								RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+							mirror: mirrored,
+						  )
+						: Container(
+							color: Theme.of(context).canvasColor,
+							child: Column(
+							  mainAxisAlignment: MainAxisAlignment.center,
+							  crossAxisAlignment: CrossAxisAlignment.center,
+							  children: [
+								Padding(
+								  padding: const EdgeInsets.all(20.0),
+								  child: Text(
+									"Open the view link in a browser.  If it doesn't auto-play, click the page.",
+									textAlign: TextAlign.center,
+									style: TextStyle(
+										color: Colors.white, fontSize: 20),
+								  ),
+								),
+							  ],
+							),
+						  )
                     : Container(
                         color: Theme.of(context).canvasColor,
                         child: Column(

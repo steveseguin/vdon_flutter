@@ -5,6 +5,7 @@ import '../utils/device_info.dart'
     if (dart.library.js) '../utils/device_info_web.dart';
 import '../utils/websocket.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
+import 'dart:math';
 
 enum SignalingState {
   ConnectionOpen,
@@ -36,14 +37,28 @@ class Signaling {
   var roomID = "";
   var quality = false;
   var active = false;
+  var WSSADDRESS = 'wss://wss.vdo.ninja:443';
+  var UUID = "";
+  
+  
   
 
-  Signaling(_streamID, _deviceID, _roomID, _quality) {
+  Signaling(_streamID, _deviceID, _roomID, _quality, _WSSADDRESS) {
     // INIT CLASS
     this.streamID = _streamID;
     this.deviceID = _deviceID;
     this.roomID = _roomID;
     this.quality = _quality;
+	this.WSSADDRESS = _WSSADDRESS;
+	
+	if (this.WSSADDRESS != "wss://wss.vdo.ninja:443") {
+	  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
+	  Random _rnd = Random();
+	  String getRandomString(int length) =>
+		  String.fromCharCodes(Iterable.generate(
+			  length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
+	  this.UUID = getRandomString(16);
+	}
   }
 
   JsonEncoder _encoder = JsonEncoder();
@@ -153,6 +168,18 @@ class Signaling {
     Map<String, dynamic> mapData = message;
 
     print(message);
+	
+	if (mapData.containsKey('from')){
+		mapData['UUID'] = mapData['from'];
+		if (mapData.containsKey("request") && (mapData['request'] == "play") && mapData.containsKey("streamID")){
+			if (mapData['streamID'] == streamID){
+				mapData['request'] = "offerSDP";
+			} else {
+				return;
+			}
+		}
+		// mapData.removeWhere((key, value) => key == "from");
+	}
 
     if (mapData['request'] == "offerSDP") {
       var uuid = mapData['UUID'];
@@ -189,6 +216,9 @@ class Signaling {
         request["session"] = _sessionID[uuid];
         request["streamID"] = streamID;
         // request["roomID"] = roomID;
+		if (!UUID.isEmpty){
+		  request["from"] = UUID;
+		}
         _socket.send(_encoder.convert(request));
       };
 
@@ -248,6 +278,15 @@ class Signaling {
 
     active=true;
 
+	if (UUID.isEmpty && WSSADDRESS != "wss://wss.vdo.ninja:443") {
+	  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
+	  Random _rnd = Random();
+	  String getRandomString(int length) =>
+		  String.fromCharCodes(Iterable.generate(
+			  length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
+	  UUID = getRandomString(16);
+	}
+
     _socket = SimpleWebSocket();
 
     _socket.onOpen = () {
@@ -257,12 +296,21 @@ class Signaling {
       var request = Map();
       request["request"] = "seed";
       request["streamID"] = streamID;
+		
+		if (!UUID.isEmpty){
+		  request["from"] = UUID;
+		}
+	     
       _socket.send(_encoder.convert(request));
 
       if (roomID != "") {
         var request = Map();
         request["request"] = "joinroom";
         request["roomid"] = roomID;
+		
+		if (!UUID.isEmpty){
+		  request["from"] = UUID;
+		}
         _socket.send(_encoder.convert(request));
       }
     };
@@ -276,11 +324,12 @@ class Signaling {
       print('Closed by server [$code => $reason]!');
       onSignalingStateChange?.call(SignalingState.ConnectionClosed);
       if (active==true){
-        _socket.connect(streamID);
+	    UUID = "";
+        _socket.connect(streamID, WSSADDRESS, UUID);
       }
     };
 
-    await _socket.connect(streamID);
+    await _socket.connect(streamID, WSSADDRESS, UUID);
   }
 
   Future<MediaStream> createStream(bool userScreen, String deviceID) async {
@@ -345,6 +394,16 @@ class Signaling {
           }
         }
       });
+	 } else if (deviceID == "microphone") {
+      stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': false
+        });
     } else if (deviceID == "rear" ||
         deviceID == "environment" ||
         deviceID.contains("0")) {
@@ -471,6 +530,9 @@ class Signaling {
       request["description"] = {'sdp': s.sdp, 'type': s.type};
       request["session"] = _sessionID[uuid];
       request["streamID"] = streamID;
+	  if (!UUID.isEmpty){
+		  request["from"] = UUID;
+		}
       _socket.send(_encoder.convert(request));
     } catch (e) {
       print(e.toString());
@@ -487,6 +549,9 @@ class Signaling {
       request["description"] = {'sdp': s.sdp, 'type': s.type};
       request["session"] = _sessionID[uuid];
       request["streamID"] = streamID;
+	  if (!UUID.isEmpty){
+		  request["from"] = UUID;
+		}
       _socket.send(_encoder.convert(request));
     } catch (e) {
       print(e.toString());
@@ -509,6 +574,9 @@ class Signaling {
        var request = Map();
       request["UUID"] = key;
       request["bye"] = true;
+	  if (!UUID.isEmpty){
+		  request["from"] = UUID;
+		}
       await _socket.send(_encoder.convert(request));
       await sess.close();
       //await sess.dispose();

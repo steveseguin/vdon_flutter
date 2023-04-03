@@ -47,6 +47,8 @@ String streamID = "";
 String roomID = "";
 String password = "";
 bool quality = false;
+bool advanced = false;
+String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 
 enum DialogDemoAction {
   cancel,
@@ -158,6 +160,7 @@ class _MyAppState extends State<MyApp> {
     streamID = _prefs.getString('streamID') ?? "";
     roomID = _prefs.getString('roomID') ?? "";
     password = _prefs.getString('password') ?? "";
+	WSSADDRESS = _prefs.getString('WSSADDRESS') ?? WSSADDRESS;
 
     try {
       quality = _prefs.getBool('resolution') ?? false;
@@ -205,6 +208,7 @@ class _MyAppState extends State<MyApp> {
                         deviceID: _deviceID,
                         roomID: roomID,
                         quality: quality,
+						WSSADDRESS: WSSADDRESS,
                       )));
         }
       }
@@ -234,7 +238,7 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 70, 0, 0),
+                padding: const EdgeInsets.fromLTRB(0, 50, 0, 0),
                 child: TextField(
                   controller: TextEditingController()..text = roomID ?? "",
                   onChanged: (String text) {
@@ -251,7 +255,7 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 150, 0, 0),
+                padding: const EdgeInsets.fromLTRB(0, 100, 0, 0),
                 child: SwitchListTile(
                     title: const Text('Prefer 1080p'),
                     value: quality,
@@ -264,6 +268,50 @@ class _MyAppState extends State<MyApp> {
                       });
                     }),
               ),
+			  
+			  Padding(
+                padding: const EdgeInsets.fromLTRB(0, 145, 0, 0),
+                child: Text(
+                  '(Passwords not yet supported)',
+                  style: TextStyle(
+                      color: Color.fromARGB(255, 188, 188, 188), fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+			  
+			  if (!advanced)
+			   Padding(
+                padding: const EdgeInsets.fromLTRB(0, 160, 0, 0),
+                child: SwitchListTile(
+                    title: const Text('Advanced'),
+                    value: advanced,
+                    onChanged: (bool value) {
+                      _prefs.setBool('advanced', value);
+                      setState(() {
+                        advanced = value;
+                        Navigator.pop(context);
+                        _showAddressDialog(context);
+                      });
+                    }),
+              ),
+			  
+			  if (advanced)
+				Padding(
+					padding: const EdgeInsets.fromLTRB(0, 170, 0, 0),
+					child: TextField(
+					  onChanged: (String text) {
+						setState(() {
+						  WSSADDRESS = text;
+						  _prefs.setString('WSSADDRESS', WSSADDRESS);
+						});
+					  },
+					  decoration: InputDecoration(
+						hintText: WSSADDRESS,
+						labelText: 'Handshake server',
+					  ),
+					  textAlign: TextAlign.center,
+					),
+				),
               //     Padding(
               //        padding: const EdgeInsets.fromLTRB(0, 130, 0, 0),
               //        child: TextField(
@@ -281,15 +329,7 @@ class _MyAppState extends State<MyApp> {
               //        ),
               //       ),
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 210, 0, 0),
-                child: Text(
-                  '(Passwords not yet supported)',
-                  style: TextStyle(
-                      color: Color.fromARGB(255, 188, 188, 188), fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-              ),
+              
             ]),
             actions: <Widget>[
               TextButton(
@@ -364,6 +404,17 @@ class _MyAppState extends State<MyApp> {
       // }
       //}
     }
+	
+	
+	 items.add(RouteItem(
+        title: 'MICROPHONE',
+        subtitle: 'Share microphone audio only',
+        icon: Icons.mic,
+        push: (BuildContext context) {
+          _deviceID = "microphone";
+          _showAddressDialog(context);
+        }));
+	
     setState(() {});
   }
 
