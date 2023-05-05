@@ -6,6 +6,7 @@ import '../utils/device_info.dart'
 import '../utils/websocket.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
 import 'dart:math';
+import 'dart:io' show Platform;
 
 enum SignalingState {
   ConnectionOpen,
@@ -461,7 +462,18 @@ class Signaling {
           }
         });
       }
-      MediaStream screenStream = await navigator.mediaDevices.getDisplayMedia({'audio': true, 'video': true});
+      MediaStream screenStream;
+      if (Platform.isIOS) {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+            'audio': true,
+            'video': {'deviceId':'broadcast'}
+          });
+      } else {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          'audio': true,
+          'video': true
+        });
+      }
       screenStream.getVideoTracks().forEach((element) async {
         await stream.addTrack(element);
       });
