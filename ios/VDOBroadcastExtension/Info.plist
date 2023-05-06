@@ -4,14 +4,14 @@
 <dict>
 	<key>NSExtension</key>
 	<dict>
-		<key>RTCAppGroupIdentifier</key>
-		<string>group.vdo</string>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.broadcast-services-upload</string>
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).SampleHandler</string>
 		<key>RPBroadcastProcessMode</key>
 		<string>RPBroadcastProcessModeSampleBuffer</string>
+		<key>RTCAppGroupIdentifier</key>
+		<string>group.vdo</string>
 	</dict>
 </dict>
 </plist>

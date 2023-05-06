@@ -345,22 +345,18 @@ class Signaling {
     }
 
     if (deviceID == "screen") {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': {
-          'facingMode': 'user',
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-            'minFrameRate': '60'
-          }
-        }
-      });
+      if (Platform.isIOS){
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          'video': {
+            'deviceId': 'broadcast'
+          }, 
+          'audio': true
+        });
+      } else {
+         stream = await navigator.mediaDevices.getDisplayMedia({
+          'video': true, 'audio': true
+        });
+      }
       if (stream.getAudioTracks().length == 0) {
         MediaStream audioStream = await navigator.mediaDevices.getUserMedia({
           'audio': {
@@ -424,59 +420,7 @@ class Signaling {
           }
         }
       });
-    } else if (deviceID.startsWith("screen_")) {
-      var cameraID = deviceID.split("screen_")[1];
-
-      if (cameraID == "front" || deviceID.contains("1") || deviceID == "user") {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'facingMode': 'user',
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'minFrameRate': '60'
-            }
-          }
-        });
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'deviceId': cameraID,
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'minFrameRate': '60'
-            }
-          }
-        });
-      }
-      MediaStream screenStream;
-      if (Platform.isIOS) {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-            'audio': true,
-            'video': {'deviceId':'broadcast'}
-          });
-      } else {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-          'audio': true,
-          'video': true
-        });
-      }
-      screenStream.getVideoTracks().forEach((element) async {
-        await stream.addTrack(element);
-      });
+    
     } else {
       //var devices =  await navigator.mediaDevices.enumerateDevices();
       stream = await navigator.mediaDevices.getUserMedia({
@@ -496,21 +440,6 @@ class Signaling {
         }
       });
     }
-
-    print({
-      'audio': {
-        'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
-      },
-      'video': {
-        'deviceId': deviceID,
-        'mandatory': {
-          'minWidth': width,
-          'minHeight': height,
-          'minFrameRate': '60'
-        }
-      }
-    });
-
     onLocalStream?.call(stream);
     return stream;
   }
