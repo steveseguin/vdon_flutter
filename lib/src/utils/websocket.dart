@@ -9,9 +9,9 @@ typedef void OnOpenCallback();
 
 class SimpleWebSocket {
     var _socket;
-    OnOpenCallback onOpen;
-    OnMessageCallback onMessage;
-    OnCloseCallback onClose;
+    late OnOpenCallback onOpen;
+    late OnMessageCallback onMessage;
+    late OnCloseCallback onClose;
     SimpleWebSocket();
 	JsonEncoder _encoder = JsonEncoder();
 
@@ -34,14 +34,14 @@ class SimpleWebSocket {
 			
 			_socket.add(_encoder.convert(request));
 			
-            onOpen?.call();
+            onOpen.call();
             _socket.listen((data) {
-                onMessage?.call(data);
+                onMessage.call(data);
             }, onDone: () {
-                onClose?.call(_socket.closeCode, _socket.closeReason);
+                onClose.call(_socket.closeCode, _socket.closeReason);
             });
         } catch (e) {
-            onClose?.call(500, e.toString());
+            onClose.call(500, e.toString());
         }
     }
 

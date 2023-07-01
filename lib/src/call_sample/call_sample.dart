@@ -17,15 +17,15 @@ class CallSample extends StatefulWidget {
   final bool mirrored;
 
   CallSample(
-      {Key key,
-      @required this.streamID,
-      @required this.deviceID,
-      @required this.roomID,
-      @required this.quality,
-	  @required this.WSSADDRESS,
-      this.preview,
-      this.muted,
-      this.mirrored})
+      {required Key key,
+      required this.streamID,
+      required this.deviceID,
+      required this.roomID,
+      required this.quality,
+	  required this.WSSADDRESS,
+      required this.preview,
+      required this.muted,
+      required this.mirrored})
       : super(key: key);
 
   @override
@@ -33,9 +33,9 @@ class CallSample extends StatefulWidget {
 }
 
 class _CallSampleState extends State<CallSample> {
-  Signaling _signaling;
-  List<dynamic> _peers;
-  var _selfId;
+  late Signaling _signaling;
+  List<dynamic> _peers = [];
+  var _selfId = "";
   RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   bool _inCalling = false;
@@ -45,7 +45,7 @@ class _CallSampleState extends State<CallSample> {
   bool mirrored = true;
 
   // ignore: unused_element
-  _CallSampleState({Key key});
+  _CallSampleState();
 
   @override
   initState() {
@@ -62,13 +62,13 @@ class _CallSampleState extends State<CallSample> {
   @override
   deactivate() {
     super.deactivate();
-    if (_signaling != null) _signaling.close();
+	_signaling.close();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
   }
 
   void _connect() async {
-    if (_signaling == null) {
+  
       _signaling = Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS);
       _signaling.connect();
 
@@ -122,11 +122,11 @@ class _CallSampleState extends State<CallSample> {
       _signaling.onRemoveRemoteStream = ((stream) {
         _remoteRenderer.srcObject = null;
       });
-    }
+    
   }
 
   _invitePeer(BuildContext context, String peerId, bool useScreen) async {
-    if (_signaling != null && peerId != _selfId) {
+    if (peerId != _selfId) {
       _signaling.invite(peerId, 'video', useScreen);
     }
   }
@@ -134,7 +134,7 @@ class _CallSampleState extends State<CallSample> {
   _hangUp() {
     _inCalling = false;
 
-    if (_signaling != null) _signaling.close();
+ _signaling.close();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
 
@@ -253,7 +253,7 @@ class _CallSampleState extends State<CallSample> {
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_switchCamera()},
-          fillColor: Theme.of(context).buttonColor,
+          fillColor: preview ? Colors.green : Colors.red,
           child: Icon(Icons.cameraswitch),
           shape: CircleBorder(),
           elevation: 2,
@@ -264,7 +264,7 @@ class _CallSampleState extends State<CallSample> {
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_toggleMirror()},
-          fillColor: Theme.of(context).buttonColor,
+          fillColor: preview ? Colors.green : Colors.red,
           child: Icon(Icons.compare_arrows),
           shape: CircleBorder(),
           elevation: 2,
@@ -275,7 +275,7 @@ class _CallSampleState extends State<CallSample> {
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_toggleFlashlight()},
-          fillColor: !torch ? Theme.of(context).buttonColor : Colors.green,
+          fillColor: !torch ? Colors.red : Colors.green,
           child:
               !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
           shape: CircleBorder(),

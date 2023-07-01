@@ -56,8 +56,8 @@ enum DialogDemoAction {
 }
 
 class _MyAppState extends State<MyApp> {
-  List<RouteItem> items;
-  SharedPreferences _prefs;
+  List<RouteItem> items = [];
+  late SharedPreferences _prefs;
 
   var _deviceID = "screen";
   List<Color> colors = [
@@ -66,6 +66,21 @@ class _MyAppState extends State<MyApp> {
     Color(0xFF33517E),
     Colors.amber,
     Colors.red,
+	Color(0xF133511E),
+	Color(0xF233512E),
+	Color(0xF333513E),
+	Color(0xF433514E),
+	Color(0xF533515E),
+	Color(0xF633516E),
+	Color(0xF733517E),
+	Color(0xF833518E),
+	Color(0xF933519E),
+	Color(0xFF33510E),
+	Color(0xFF33517E),
+	Color(0xFF33517E),
+	Color(0xFF33517E),
+	Color(0xFF33517E),
+	Color(0xFF33517E)
   ];
 
   @override
@@ -124,7 +139,7 @@ class _MyAppState extends State<MyApp> {
                     child: Text(
                       "Share",
                       textAlign: TextAlign.left,
-                      style: theme.textTheme.headline1.apply(
+                      style: theme.textTheme.displayLarge!.apply(
                           color: Colors.white,
                           fontWeightDelta: 10,
                           fontSizeFactor: 1.5),
@@ -192,26 +207,29 @@ class _MyAppState extends State<MyApp> {
     await FlutterBackground.initialize(androidConfig: androidConfig);
   }
 
-  void showDemoDialog<T>({BuildContext context, Widget child}) {
+  void showDemoDialog<T>({required BuildContext context, required Widget child}) {
     showDialog<T>(
       context: context,
       builder: (BuildContext context) => child,
-    ).then<void>((T value) {
+    ).then<void>((T? value) {
       // The value passed to Navigator.pop() or null.
-      if (value != null) {
         if (value == DialogDemoAction.connect) {
           Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (BuildContext context) => CallSample(
+                  builder: (context) => CallSample(
+						key: new GlobalKey<ScaffoldState>(),
                         streamID: streamID,
                         deviceID: _deviceID,
                         roomID: roomID,
                         quality: quality,
 						WSSADDRESS: WSSADDRESS,
+						muted: false,
+						preview: true,
+						mirrored:true
                       )));
         }
-      }
+      
     });
   }
 
@@ -375,9 +393,8 @@ class _MyAppState extends State<MyApp> {
         cameraType = 'Front Camera';
       } else if (item.label.toLowerCase().contains('environment')) {
         cameraType = 'Rear Camera';
-      } else if (item.label is String) {
-        cameraType = item.label;
-      }
+      } else      cameraType = item.label;
+
 
       items.add(RouteItem(
           title: cameraType.toUpperCase(),

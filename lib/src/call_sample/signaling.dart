@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import '../utils/device_info.dart'
-    if (dart.library.js) '../utils/device_info_web.dart';
 import '../utils/websocket.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
 import 'dart:math';
@@ -24,7 +22,6 @@ enum CallState {
 /*
  * callbacks for Signaling API.
  */
-typedef void SignalingStateCallback(SignalingState state);
 typedef void CallStateCallback(CallState state);
 typedef void StreamStateCallback(MediaStream stream);
 typedef void OtherEventCallback(dynamic event);
@@ -63,23 +60,23 @@ class Signaling {
 
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
-  SimpleWebSocket _socket;
+  late SimpleWebSocket _socket;
   var _port = 443;
   var _sessions = {};
   var _sessionID = {};
 
 
-  MediaStream _localStream;
+  late MediaStream _localStream;
   List<MediaStream> _remoteStreams = <MediaStream>[];
 
-  SignalingStateCallback onSignalingStateChange;
-  CallStateCallback onCallStateChange;
-  StreamStateCallback onLocalStream;
-  StreamStateCallback onAddRemoteStream;
-  StreamStateCallback onRemoveRemoteStream;
-  OtherEventCallback onPeersUpdate;
-  DataChannelMessageCallback onDataChannelMessage;
-  DataChannelCallback onDataChannel;
+  late Function(SignalingState state) onSignalingStateChange;
+  late CallStateCallback onCallStateChange;
+  late StreamStateCallback onLocalStream;
+  late  StreamStateCallback onAddRemoteStream;
+  late StreamStateCallback onRemoveRemoteStream;
+  late OtherEventCallback onPeersUpdate;
+  late DataChannelMessageCallback onDataChannelMessage;
+  late  DataChannelCallback onDataChannel;
 
   String get sdpSemantics => 'unified-plan';
 
@@ -117,24 +114,19 @@ class Signaling {
 
   close() async {
     _cleanSessions();
-    _localStream = null;
-    _remoteStreams = null;
   }
 
   MediaStream getLocalStream() {
-    if (_localStream != null) {
-      return _localStream;
-    }
+     return _localStream;
+    
   }
 
   void switchCamera() {
-    if (_localStream != null) {
       Helper.switchCamera(_localStream.getVideoTracks()[0]);
-    }
+    
   }
 
   toggleTorch(torch) async {
-    if (_localStream != null) {
       final videoTrack = _localStream
           .getVideoTracks()
           .firstWhere((track) => track.kind == "video");
@@ -149,15 +141,14 @@ class Signaling {
       } catch (e) {
         print("[TORCH] Current camera does not support torch mode 2");
       }
-    }
+    
     return false;
   }
 
   void muteMic() {
-    if (_localStream != null) {
       bool enabled = _localStream.getAudioTracks()[0].enabled;
       _localStream.getAudioTracks()[0].enabled = !enabled;
-    }
+    
   }
 
   void invite(peerId, video, useScreen) {}
@@ -191,7 +182,7 @@ class Signaling {
 
       pc.onTrack = (event) {
         if (event.track.kind == 'video') {
-          onAddRemoteStream?.call(event.streams[0]);
+          onAddRemoteStream.call(event.streams[0]);
         }
       };
 
@@ -268,13 +259,8 @@ class Signaling {
   }
 
   Future<void> connect() async {
-    if (_localStream == null) {
-      _localStream = await createStream(true, deviceID);
-    } else {
-      _sessions.forEach((key, sess) async {
-        await sess.close();
-      });
-    }
+    _localStream = await createStream(true, deviceID);
+    
 
     active=true;
 
@@ -291,7 +277,7 @@ class Signaling {
 
     _socket.onOpen = () {
       print('onOpen');
-      onSignalingStateChange?.call(SignalingState.ConnectionOpen);
+      onSignalingStateChange.call(SignalingState.ConnectionOpen);
 
       var request = Map();
       request["request"] = "seed";
@@ -322,7 +308,7 @@ class Signaling {
 
     _socket.onClose = (int code, String reason) {
       print('Closed by server [$code => $reason]!');
-      onSignalingStateChange?.call(SignalingState.ConnectionClosed);
+      onSignalingStateChange.call(SignalingState.ConnectionClosed);
       if (active==true){
 	    UUID = "";
         _socket.connect(streamID, WSSADDRESS, UUID);
@@ -499,7 +485,7 @@ class Signaling {
       }
     });
 
-    onLocalStream?.call(stream);
+    onLocalStream.call(stream);
     return stream;
   }
 
@@ -512,7 +498,7 @@ class Signaling {
     //  onDataChannel?.call(channel);
   }
 
-  Future<void> _createDataChannel({label: 'fileTransfer'}) async {
+  Future<void> _createDataChannel() async {
     // RTCDataChannelInit dataChannelDict = RTCDataChannelInit()
     //     ..maxRetransmits = 30;
     //RTCDataChannel channel = await session.pc.createDataChannel(label, dataChannelDict);
@@ -561,15 +547,10 @@ class Signaling {
   Future<void> _cleanSessions() async {
     active=false;
 
-    if (_localStream != null) {
-      _localStream.getTracks().forEach((element) async {
-        await element.stop();
-      }); 
-    }  
-    if (_localStream != null) {
-      await _localStream.dispose();
-      _localStream = null;
-    }
+    _localStream.getTracks().forEach((element) async {
+      await element.stop();
+    }); 
+    await _localStream.dispose();
     _sessions.forEach((key, sess) async {
        var request = Map();
       request["UUID"] = key;
