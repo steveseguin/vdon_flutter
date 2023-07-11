@@ -20,7 +20,7 @@
 <!-- Needed to communicate with already-paired Bluetooth devices. (Legacy up to Android 11) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-	
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
 <!-- Needed to communicate with already-paired Bluetooth devices. (Android 12 upwards)-->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -60,9 +60,7 @@
             </intent-filter>
         </activity>
 		
-		<service android:name="de.julianassmann.flutter_background.IsolateHolderService"
-            android:foregroundServiceType="mediaProjection"
-            android:enabled="true"
-            android:exported="false"/>
+		<service android:name="de.julianassmann.flutter_background.IsolateHolderService" android:exported="true"  android:enabled="true" android:foregroundServiceType="camera|microphone|mediaProjection"/>
+		
     </application>
 </manifest>
