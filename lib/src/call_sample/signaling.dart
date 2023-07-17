@@ -320,15 +320,16 @@ class Signaling {
   }
 
   Future<MediaStream> createStream(bool userScreen, String deviceID) async {
-    MediaStream stream;
 
     String width = "1280";
     String height = "720";
-
+    late MediaStream audioStream;
+    late MediaStream stream;
     if (quality) {
       width = "1920";
       height = "1080";
     }
+     String framerate = "60";
 
     if (deviceID == "screen") {
       if (Platform.isIOS){
@@ -344,7 +345,7 @@ class Signaling {
         });
       }
       if (stream.getAudioTracks().length == 0) {
-        MediaStream audioStream = await navigator.mediaDevices.getUserMedia({
+        audioStream = await navigator.mediaDevices.getUserMedia({
           'audio': {
             'mandatory': {
               'googEchoCancellation': false,
@@ -361,7 +362,8 @@ class Signaling {
     } else if (deviceID == "front" ||
         deviceID.contains("1") ||
         deviceID == "user") {
-      stream = await navigator.mediaDevices.getUserMedia({
+		if (quality){
+        stream = await navigator.mediaDevices.getUserMedia({
         'audio': {
           'mandatory': {
             'googEchoCancellation': false,
@@ -373,12 +375,30 @@ class Signaling {
           'mandatory': {
             'minWidth': width,
             'minHeight': height,
-            'minFrameRate': '60'
           }
         }
       });
+		} else{
+
+			 stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'facingMode': 'user',
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'frameRate': framerate
+          }
+        }
+      });
+		}
 	 } else if (deviceID == "microphone") {
-      stream = await navigator.mediaDevices.getUserMedia({
+       stream = await navigator.mediaDevices.getUserMedia({
         'audio': {
           'mandatory': {
             'googEchoCancellation': false,
@@ -390,6 +410,7 @@ class Signaling {
     } else if (deviceID == "rear" ||
         deviceID == "environment" ||
         deviceID.contains("0")) {
+	if (quality){
       stream = await navigator.mediaDevices.getUserMedia({
         'audio': {
           'mandatory': {
@@ -402,13 +423,31 @@ class Signaling {
           'mandatory': {
             'minWidth': width,
             'minHeight': height,
-            'minFrameRate': '60'
           }
         }
       });
-    
+    } else {
+		stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': false,
+            'echoCancellation': false
+          }
+        },
+        'video': {
+          'facingMode': 'environment',
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+            'frameRate': framerate
+          }
+        }
+      });
+
+	}
     } else {
       //var devices =  await navigator.mediaDevices.enumerateDevices();
+      if (quality){
       stream = await navigator.mediaDevices.getUserMedia({
         'audio': {
           'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
@@ -418,12 +457,26 @@ class Signaling {
           'mandatory': {
             'minWidth': width,
             'minHeight': height,
-            'minFrameRate': '60'
           }
         }
       });
+	} else {
+		stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+        },
+        'video': {
+          'deviceId': deviceID,
+          'mandatory': {
+            'minWidth': width,
+            'minHeight': height,
+			'frameRate': framerate
+          }
+        }
+      });
+	}
     }
-
+	
     onLocalStream?.call(stream);
     return stream;
   }

@@ -1,8 +1,8 @@
 PODS:
   - Flutter (1.0.0)
-  - flutter_webrtc (0.9.17):
+  - flutter_webrtc (0.9.31):
     - Flutter
-    - WebRTC-SDK (= 104.5112.07)
+    - WebRTC-SDK (= 114.5735.01)
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -15,14 +15,14 @@ PODS:
     - Flutter
   - wakelock (0.0.1):
     - Flutter
-  - WebRTC-SDK (104.5112.07)
+  - WebRTC-SDK (114.5735.01)
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_webrtc (from `.symlinks/plugins/flutter_webrtc/ios`)
-  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - share (from `.symlinks/plugins/share/ios`)
-  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - wakelock (from `.symlinks/plugins/wakelock/ios`)
 
@@ -36,11 +36,11 @@ EXTERNAL SOURCES:
   flutter_webrtc:
     :path: ".symlinks/plugins/flutter_webrtc/ios"
   path_provider_foundation:
-    :path: ".symlinks/plugins/path_provider_foundation/ios"
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
   share:
     :path: ".symlinks/plugins/share/ios"
   shared_preferences_foundation:
-    :path: ".symlinks/plugins/shared_preferences_foundation/ios"
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   url_launcher_ios:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
   wakelock:
@@ -48,13 +48,13 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: f04841e97a9d0b0a8025694d0796dd46242b2854
-  flutter_webrtc: 6767eafaa728c1e58026e901ca19f3fd5d713397
-  path_provider_foundation: 37748e03f12783f9de2cb2c4eadfaa25fe6d4852
+  flutter_webrtc: 085e95e9aba0f49176e315d5dd580ad4287d3c00
+  path_provider_foundation: eaf5b3e458fc0e5fbb9940fb09980e853fe058b8
   share: 0b2c3e82132f5888bccca3351c504d0003b3b410
-  shared_preferences_foundation: 297b3ebca31b34ec92be11acd7fb0ba932c822ca
-  url_launcher_ios: ae1517e5e344f5544fb090b079e11f399dfbe4d2
+  shared_preferences_foundation: 5b919d13b803cadd15ed2dc053125c68730e5126
+  url_launcher_ios: 08a3dfac5fb39e8759aeb0abbd5d9480f30fc8b4
   wakelock: d0fc7c864128eac40eba1617cb5264d9c940b46f
-  WebRTC-SDK: ef83f71e443c135d98de109940343bcf6d313e8f
+  WebRTC-SDK: 31abfb47b8e9ed5e27a2c46baa61015587dda966
 
 PODFILE CHECKSUM: cf0c950f7e9a456b4e325f5b8fc0f98906a3705a
 
