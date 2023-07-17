@@ -15,6 +15,9 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:wakelock/wakelock.dart';
 import 'package:flutter_background/flutter_background.dart';
 
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 void main() {
   if (WebRTC.platformIsDesktop) {
     debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
@@ -24,6 +27,7 @@ void main() {
   }
   runApp(MyApp());
 }
+
 
 Future<bool> startForegroundService() async {
   final androidConfig = FlutterBackgroundAndroidConfig(
@@ -120,7 +124,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: Scaffold(
+      home: Scaffold( 
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           title: Text('VDO.Ninja'),
@@ -153,6 +157,9 @@ class _MyAppState extends State<MyApp> {
                     itemBuilder: (context, i) {
                       return _buildRow(context, items[i], i);
                     }),
+					
+			
+				
                 Align(
                   alignment: FractionalOffset.bottomCenter,
                   child: TextButton.icon(
@@ -161,6 +168,7 @@ class _MyAppState extends State<MyApp> {
                       onPressed: () => {_openDiscord()},
                       label: Text("Need help? Join our Discord.")),
                 ),
+				
               ],
             )),
           ],
@@ -218,16 +226,16 @@ class _MyAppState extends State<MyApp> {
               context,
               MaterialPageRoute(
                   builder: (context) => CallSample(
-						key: new GlobalKey<ScaffoldState>(),
-                        streamID: streamID,
-                        deviceID: _deviceID,
-                        roomID: roomID,
-                        quality: quality,
-						WSSADDRESS: WSSADDRESS,
-						muted: false,
-						preview: true,
-						mirrored:true
-                      )));
+					key: new GlobalKey<ScaffoldState>(),
+					streamID: streamID,
+					deviceID: _deviceID,
+					roomID: roomID,
+					quality: quality,
+					WSSADDRESS: WSSADDRESS,
+					muted: false,
+					preview: true,
+					mirrored:true
+				  )));
         }
       
     });
@@ -420,7 +428,7 @@ class _MyAppState extends State<MyApp> {
       //   }));
       // }
       //}
-    }
+     }
 	
 	
 	 items.add(RouteItem(
@@ -431,16 +439,94 @@ class _MyAppState extends State<MyApp> {
           _deviceID = "microphone";
           _showAddressDialog(context);
         }));
+		
+		
+	  items.add(RouteItem(
+        title: 'WEB VERSION',
+        subtitle: 'Some other features',
+        icon:  Icons.grid_view,
+		
+        push: (BuildContext context) {
+				Navigator.push(
+				context,
+				MaterialPageRoute(builder: (context) => WebViewScreen(url: "https://youtube.com")),
+			  );
+			},
+		));
+		
 	
     setState(() {});
   }
-
+  
   _openDiscord() async {
-    const url = 'https://discord.vdo.ninja';
-    if (await canLaunch(url)) {
-      await launch(url);
-    } else {
-      throw 'Could not launch $url';
-    }
+	final Uri url = Uri.parse('https://discord.vdo.ninja/');
+	if (!await launchUrl(url, mode: LaunchMode.externalApplication ,webOnlyWindowName:'_blank')) {
+		throw Exception('Could not launch $url');
+	}
   }
 }
+
+
+final PlatformWebViewControllerCreationParams params = const PlatformWebViewControllerCreationParams();
+
+class WebViewScreen extends StatefulWidget {
+  final String url;
+
+  WebViewScreen({required this.url});
+
+  @override
+  _WebViewScreenState createState() => _WebViewScreenState();
+}
+
+class _WebViewScreenState extends State<WebViewScreen> {
+	
+	Future<void> requestCameraPermission() async {
+	   final status = await Permission.camera.request();
+		 if (status == PermissionStatus.granted) {
+		 // Permission granted.
+		 } else if (status == PermissionStatus.denied) {
+		 // Permission denied.
+		 } else if (status == PermissionStatus.permanentlyDenied) {
+		 // Permission permanently denied.
+	  }
+	}
+
+	WebViewController controller = WebViewController.fromPlatformCreationParams(
+	  params,
+	  onPermissionRequest: (WebViewPermissionRequest request) {
+		request.grant();
+	  },
+	)
+  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+  ..setBackgroundColor(const Color(0x00000000))
+  ..setNavigationDelegate(
+	NavigationDelegate(
+	  onProgress: (int progress) {
+		// Update loading bar.
+	  },
+	  onPageStarted: (String url) {
+		  print('Loading page');
+	  },
+	  onPageFinished: (String url) {
+	  },
+	  onWebResourceError: (WebResourceError error) {},
+	  onNavigationRequest: (NavigationRequest request) {
+		return NavigationDecision.navigate;
+	  },
+	),
+  )
+  ..loadRequest(Uri.parse("https://vdo.ninja/?app=1"));
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: WebViewWidget(controller: controller),
+	   appBar: PreferredSize(
+          preferredSize: Size.fromHeight(0.0), // here the desired height
+          child:  AppBar(),
+        ),
+    );
+  }
+}
+
+
