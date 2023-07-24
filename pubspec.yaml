@@ -1,7 +1,7 @@
 name: vdo_ninja
 description: Simple capture app for VDO.NInja
-version: 5.0.17+17
-versionCode: 17
+version: 5.0.19+19
+versionCode: 19
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
@@ -20,6 +20,8 @@ dependencies:
   webview_flutter: ^4.2.2
   url_launcher: ^6.0.12
   permission_handler: ^10.4.3
+  encrypt: ^5.0.1
+  tuple: ^2.0.2
   flutter_background:
     git:
       url: https://github.com/JulianAssmann/flutter_background
@@ -28,6 +30,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
     
 
 flutter:

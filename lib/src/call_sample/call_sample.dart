@@ -204,12 +204,14 @@ class _CallSampleState extends State<CallSample> {
 
   @override
   Widget build(BuildContext context) {
-    String tmp = "https://vdo.ninja/?v=" + widget.streamID + "&p=0";
+
+
+    String tmp = "https://vdo.ninja/?v=" + widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') + "&p=0";
     if (widget.roomID != "") {
       tmp = "https://vdo.ninja/?v=" +
-          widget.streamID +
+          widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') +
           "&r=" +
-          widget.roomID +
+          widget.roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') +
           "&scn&p=0";
     }
 	

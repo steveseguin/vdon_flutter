@@ -153,6 +153,7 @@ class _MyAppState extends State<MyApp> {
                 ListView.builder(
                     shrinkWrap: true,
                     padding: const EdgeInsets.all(8.0),
+					physics: const NeverScrollableScrollPhysics(),
                     itemCount: items.length,
                     itemBuilder: (context, i) {
                       return _buildRow(context, items[i], i);
@@ -198,6 +199,9 @@ class _MyAppState extends State<MyApp> {
       streamID = getRandomString(8);
       _prefs.setString('streamID', streamID);
     }
+
+	streamID = streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+	roomID = roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
 
     setState(() {
       Wakelock.enable();
@@ -246,7 +250,14 @@ class _MyAppState extends State<MyApp> {
         context: context,
         child: AlertDialog(
             title: const Text('Publishing settings'),
-            content: Stack(children: [
+			scrollable: true,
+			insetPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+			// (horizontal:10 = left:10, right:10)(vertical:10 = top:10, bottom:10)
+			contentPadding: EdgeInsets.only(left: 10, right: 10, bottom: MediaQuery.of(context).viewInsets.bottom),
+ 
+            content: SingleChildScrollView(
+			child: new Stack(
+			  children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
                 child: TextField(
@@ -258,9 +269,11 @@ class _MyAppState extends State<MyApp> {
                   },
                   decoration: InputDecoration(
                     hintText: streamID,
-                    labelText: 'Stream ID',
+                    labelText: 'Stream ID (optional)',
+					border: InputBorder.none
                   ),
                   textAlign: TextAlign.center,
+				  style: Theme.of(context).textTheme.bodyText1,
                 ),
               ),
               Padding(
@@ -275,7 +288,7 @@ class _MyAppState extends State<MyApp> {
                   },
                   decoration: InputDecoration(
                     hintText: roomID ?? "Room name",
-                    labelText: 'Optional room name',
+                    labelText: 'Room name (optional)',
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -356,7 +369,7 @@ class _MyAppState extends State<MyApp> {
               //       ),
 
               
-            ]),
+            ])),
             actions: <Widget>[
               TextButton(
                   child: const Text('CANCEL'),
@@ -443,13 +456,26 @@ class _MyAppState extends State<MyApp> {
 		
 	  items.add(RouteItem(
         title: 'WEB VERSION',
-        subtitle: 'Some other features',
+        subtitle: 'More features available',
         icon:  Icons.grid_view,
 		
         push: (BuildContext context) {
 				Navigator.push(
 				context,
-				MaterialPageRoute(builder: (context) => WebViewScreen(url: "https://youtube.com")),
+				MaterialPageRoute(builder: (context) => WebViewScreen(url: "https://vdo.ninja/?app=1")),
+			  );
+			},
+		));
+
+	  items.add(RouteItem(
+        title: 'HOW TO USE',
+        subtitle: 'A simple guide on using the VDO.Ninja native app',
+        icon:  Icons.menu_book,
+		
+        push: (BuildContext context) {
+				Navigator.push(
+				context,
+				MaterialPageRoute(builder: (context) => WebViewScreen(url: "https://nativehelp.vdo.ninja/?app=1")),
 			  );
 			},
 		));
@@ -490,32 +516,37 @@ class _WebViewScreenState extends State<WebViewScreen> {
 		 // Permission permanently denied.
 	  }
 	}
+	late WebViewController controller;
 
-	WebViewController controller = WebViewController.fromPlatformCreationParams(
-	  params,
-	  onPermissionRequest: (WebViewPermissionRequest request) {
-		request.grant();
-	  },
-	)
-  ..setJavaScriptMode(JavaScriptMode.unrestricted)
-  ..setBackgroundColor(const Color(0x00000000))
-  ..setNavigationDelegate(
-	NavigationDelegate(
-	  onProgress: (int progress) {
-		// Update loading bar.
-	  },
-	  onPageStarted: (String url) {
-		  print('Loading page');
-	  },
-	  onPageFinished: (String url) {
-	  },
-	  onWebResourceError: (WebResourceError error) {},
-	  onNavigationRequest: (NavigationRequest request) {
-		return NavigationDecision.navigate;
-	  },
-	),
-  )
-  ..loadRequest(Uri.parse("https://vdo.ninja/?app=1"));
+	  @override
+	  void initState() {
+		super.initState();
+		controller = WebViewController.fromPlatformCreationParams(
+		  params,
+		  onPermissionRequest: (WebViewPermissionRequest request) {
+			request.grant();
+		  },
+		)
+	  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+	  ..setBackgroundColor(const Color(0x00000000))
+	  ..setNavigationDelegate(
+		NavigationDelegate(
+		  onProgress: (int progress) {
+			// Update loading bar.
+		  },
+		  onPageStarted: (String url) {
+			  print('Loading page');
+		  },
+		  onPageFinished: (String url) {
+		  },
+		  onWebResourceError: (WebResourceError error) {},
+		  onNavigationRequest: (NavigationRequest request) {
+			return NavigationDecision.navigate;
+		  },
+		),
+	  )
+	  ..loadRequest(Uri.parse(widget.url));
+	}
 
   @override
   Widget build(BuildContext context) {

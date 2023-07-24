@@ -4,7 +4,12 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../utils/websocket.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
 import 'dart:math';
+import 'dart:core';
 import 'dart:io' show Platform;
+import 'package:tuple/tuple.dart';
+import 'dart:typed_data';
+import 'package:encrypt/encrypt.dart';
+import 'package:crypto/crypto.dart';
 
 enum SignalingState {
   ConnectionOpen,
@@ -19,6 +24,46 @@ enum CallState {
   CallStateConnected,
   CallStateBye,
 }
+
+/* Tuple2<String, IV> encryptMessage(String message,  {String? phrase}) {
+  final phraseToUse = phrase ?? 'someEncryptionKey123vdo.ninja';
+  final iv = IV.fromLength(16);
+
+  final bytes1 = utf8.encode(phraseToUse);         // data being hashed
+  final digest1 = sha256.convert(bytes1);  
+
+  final key = Key.fromUtf8(digest1.toString());
+
+  final encrypter = Encrypter(AES(key, mode: AESMode.cbc));
+
+  final encrypted = encrypter.encrypt(message, iv: iv);
+  final encryptedData = encrypted.base64;
+
+  return  new Tuple2(encryptedData, iv);
+}
+
+Tuple2<String, IV> encryptMessage2(plainText) {
+  final key = Key.fromUtf8('someEncryptionKey123vdo.ninja');
+  final iv = IV.fromLength(16);
+
+  final encrypter = Encrypter(AES(key));
+  final encrypted = encrypter.encrypt(plainText, iv: iv); 
+
+  print(encrypted.base64);
+
+  return new Tuple2(encrypted.base64, iv);
+}
+
+String decryptMessage2(encrypted, iv) {
+  final key = Key.fromUtf8('someEncryptionKey123vdo.ninja');
+  final iv = IV.fromLength(16);
+
+  final encrypter = Encrypter(AES(key));
+  final decrypted = encrypter.decrypt(encrypted, iv: iv);
+
+  return decrypted;
+} */
+
 
 /*
  * callbacks for Signaling API.
@@ -37,17 +82,21 @@ class Signaling {
   var active = false;
   var WSSADDRESS = 'wss://wss.vdo.ninja:443';
   var UUID = "";
-  
-  
-  
+
 
   Signaling(_streamID, _deviceID, _roomID, _quality, _WSSADDRESS) {
     // INIT CLASS
+
+	_streamID = _streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+	_roomID = _roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+
     this.streamID = _streamID;
     this.deviceID = _deviceID;
     this.roomID = _roomID;
     this.quality = _quality;
 	this.WSSADDRESS = _WSSADDRESS;
+
+	
 	
 	if (this.WSSADDRESS != "wss://wss.vdo.ninja:443") {
 	  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
@@ -207,6 +256,7 @@ class Signaling {
         request["type"] = "local";
         request["session"] = _sessionID[uuid];
         request["streamID"] = streamID;
+
         // request["roomID"] = roomID;
 		if (!UUID.isEmpty){
 		  request["from"] = UUID;
