@@ -627,7 +627,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.15;
+				CURRENT_PROJECT_VERSION = 2.0.19;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_BITCODE = NO;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -644,7 +644,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Flutter",
 				);
-				MARKETING_VERSION = 2.0.15;
+				MARKETING_VERSION = 2.0.19;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -661,7 +661,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.15;
+				CURRENT_PROJECT_VERSION = 2.0.19;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_BITCODE = NO;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -678,7 +678,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Flutter",
 				);
-				MARKETING_VERSION = 2.0.15;
+				MARKETING_VERSION = 2.0.19;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -697,7 +697,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.15;
+				CURRENT_PROJECT_VERSION = 2.0.19;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -710,7 +710,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.15;
+				MARKETING_VERSION = 2.0.19;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
@@ -735,7 +735,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.15;
+				CURRENT_PROJECT_VERSION = 2.0.19;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -748,7 +748,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.15;
+				MARKETING_VERSION = 2.0.19;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -772,7 +772,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.15;
+				CURRENT_PROJECT_VERSION = 2.0.19;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -785,7 +785,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.15;
+				MARKETING_VERSION = 2.0.19;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
@@ -810,7 +810,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.15;
+				CURRENT_PROJECT_VERSION = 2.0.19;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -823,7 +823,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.15;
+				MARKETING_VERSION = 2.0.19;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
