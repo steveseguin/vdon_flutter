@@ -3,6 +3,8 @@ import 'dart:core';
 import 'signaling.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:share/share.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
@@ -11,6 +13,7 @@ class CallSample extends StatefulWidget {
   final String deviceID;
   final String roomID;
   final String WSSADDRESS;
+  final String TURNSERVER;
   final bool quality;
   final bool preview;
   final bool muted;
@@ -23,6 +26,7 @@ class CallSample extends StatefulWidget {
       required this.roomID,
       required this.quality,
 	  required this.WSSADDRESS,
+	  required this.TURNSERVER,
       required this.preview,
       required this.muted,
       required this.mirrored})
@@ -69,7 +73,94 @@ class _CallSampleState extends State<CallSample> {
 
   void _connect() async {
   
-      _signaling = Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS);
+		 var TURNLIST = [
+			  {'url': 'stun:stun.l.google.com:19302'},
+			  {
+				'url': 'turn:turn-use1.vdo.ninja:3478',
+				'username': 'vdoninja',
+				'credential': 'EastSideRepresentZ'
+			  },
+			  {
+				'url': 'turns:www.turn.vdo.ninja:443',
+				'username': 'vdoninja',
+				'credential': 'IchBinSteveDerNinja'
+			  }
+		  ];
+  
+  
+		if (widget.TURNSERVER=="" || widget.TURNSERVER == "un;pw;turn:turn.x.co:3478"){ // assume they are using the defaults
+			  try {
+				final uri = await Uri.parse("https://turnservers.vdo.ninja/?flutter="+DateTime.now().microsecondsSinceEpoch.toString());
+				final response = await http.get(uri);
+				print("-----------------------------------");
+				if (response.statusCode == 200){
+					var TURNLIST = jsonDecode(response.body)['servers'];
+					TURNLIST.add({'url': 'stun:stun.l.google.com:19302'});
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+				} else {
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+				}
+			  } on Exception catch (_) {
+					print("using default hard coded turn list");
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+			  }
+		  } else if (widget.TURNSERVER.startsWith("https://") || widget.TURNSERVER.startsWith("http://")){ // assume they are using the defaults
+			  try {
+				final uri = await Uri.parse(widget.TURNSERVER);
+				final response = await http.get(uri); 
+				if (response.statusCode == 200){
+					var TURNLIST = jsonDecode(response.body)['servers'];
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+				} else {
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+				}
+			  } on Exception catch (_) {
+					print("using default hard coded turn list");
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+			  } 
+		  } else {
+				var customturn = widget.TURNSERVER.split(";");
+				
+				if (customturn.length==3){
+					var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
+					TURNLIST.add({
+						'url': customturn[2],
+						'username': customturn[0],
+						'credential': customturn[1]
+					  });
+					  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+				} else if (customturn.length==1){
+					
+					if (customturn[0].startsWith("stun:")){
+						var TURNLIST  = [{'url': customturn[0]}];
+						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					} else if (customturn[0].startsWith("turn:")){
+						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
+						TURNLIST.add({
+							'url': customturn[0]
+						  });
+						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					} else if (customturn[0].startsWith("turns:")){
+						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
+						TURNLIST.add({
+							'url': customturn[0]
+						  });
+						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					} else if (customturn[0]=="false" || customturn[0]=="0" || customturn[0]=="off" || customturn[0]=="none"){
+						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
+						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					} else {
+						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
+						TURNLIST.add({
+							'url': customturn[0]
+						  });
+						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					}
+				} else{
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+				}
+		  }
+  
       _signaling.connect();
 
       _signaling.onSignalingStateChange = (SignalingState state) {

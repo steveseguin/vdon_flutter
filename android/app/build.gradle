@@ -35,7 +35,7 @@ android {
     defaultConfig {
         applicationId "flutter.vdo.ninja"
         minSdkVersion 21 
-        targetSdkVersion 31
+        targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
         versionName flutteVersionName
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"

@@ -53,6 +53,7 @@ String password = "";
 bool quality = false;
 bool advanced = false;
 String WSSADDRESS = 'wss://wss.vdo.ninja:443';
+String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
 
 enum DialogDemoAction {
   cancel,
@@ -185,6 +186,7 @@ class _MyAppState extends State<MyApp> {
     roomID = _prefs.getString('roomID') ?? "";
     password = _prefs.getString('password') ?? "";
 	WSSADDRESS = _prefs.getString('WSSADDRESS') ?? WSSADDRESS;
+	TURNSERVER = _prefs.getString('TURNSERVER') ?? TURNSERVER;
 
     try {
       quality = _prefs.getBool('resolution') ?? false;
@@ -236,6 +238,7 @@ class _MyAppState extends State<MyApp> {
 					roomID: roomID,
 					quality: quality,
 					WSSADDRESS: WSSADDRESS,
+					TURNSERVER: TURNSERVER,
 					muted: false,
 					preview: true,
 					mirrored:true
@@ -269,7 +272,7 @@ class _MyAppState extends State<MyApp> {
                   },
                   decoration: InputDecoration(
                     hintText: streamID,
-                    labelText: 'Stream ID (optional)',
+                    labelText: 'Stream ID (auto-generated if empty)',
 					border: InputBorder.none
                   ),
                   textAlign: TextAlign.center,
@@ -351,6 +354,24 @@ class _MyAppState extends State<MyApp> {
 					  textAlign: TextAlign.center,
 					),
 				),
+			if (advanced)
+				Padding(
+					padding: const EdgeInsets.fromLTRB(0, 235, 0, 0),
+					child: TextField(
+					  onChanged: (String text) {
+						setState(() {
+						  TURNSERVER = text;
+						  _prefs.setString('TURNSERVER', TURNSERVER);
+						});
+					  },
+					  decoration: InputDecoration(
+						hintText: TURNSERVER,
+						labelText: 'TURN server',
+					  ),
+					  textAlign: TextAlign.center,
+					),
+				),
+			
               //     Padding(
               //        padding: const EdgeInsets.fromLTRB(0, 130, 0, 0),
               //        child: TextField(

@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'package:encrypt/encrypt.dart';
 import 'package:crypto/crypto.dart';
 
+
 enum SignalingState {
   ConnectionOpen,
   ConnectionClosed,
@@ -74,6 +75,7 @@ typedef void OtherEventCallback(dynamic event);
 typedef void DataChannelMessageCallback(RTCDataChannel dc, RTCDataChannelMessage data);
 typedef void DataChannelCallback(RTCDataChannel dc);
 
+
 class Signaling {
   var streamID = "";
   var deviceID = "screen";
@@ -82,9 +84,9 @@ class Signaling {
   var active = false;
   var WSSADDRESS = 'wss://wss.vdo.ninja:443';
   var UUID = "";
+  var TURNLIST = [];
 
-
-  Signaling(_streamID, _deviceID, _roomID, _quality, _WSSADDRESS) {
+  Signaling (_streamID, _deviceID, _roomID, _quality, _WSSADDRESS, _TURNLIST) {
     // INIT CLASS
 
 	_streamID = _streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
@@ -95,8 +97,14 @@ class Signaling {
     this.roomID = _roomID;
     this.quality = _quality;
 	this.WSSADDRESS = _WSSADDRESS;
-
+	this.TURNLIST = _TURNLIST;
 	
+	print("1111111111111111111111111111111111111111111111111111111111111111111111");
+	print("1111111111111111111111111111111111111111111111111111111111111111111111");
+	print("1111111111111111111111111111111111111111111111111111111111111111111111");
+	print("1111111111111111111111111111111111111111111111111111111111111111111111");
+	print(this.TURNLIST );
+
 	
 	if (this.WSSADDRESS != "wss://wss.vdo.ninja:443") {
 	  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
@@ -106,6 +114,7 @@ class Signaling {
 			  length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
 	  this.UUID = getRandomString(16);
 	}
+	
   }
 
   JsonEncoder _encoder = JsonEncoder();
@@ -129,24 +138,8 @@ class Signaling {
   late  DataChannelCallback onDataChannel;
 
   String get sdpSemantics => 'unified-plan';
-
-  Map<String, dynamic> configuration = {
-    'sdpSemantics': "unified-plan",
-    'iceServers': [
-      {'url': 'stun:stun.l.google.com:19302'},
-      {
-        'url': 'turn:turn-use1.vdo.ninja:3478',
-        'username': 'vdoninja',
-        'credential': 'EastSideRepresentZ'
-      },
-      {
-        'url': 'turns:www.turn.vdo.ninja:443',
-        'username': 'vdoninja',
-        'credential': 'IchBinSteveDerNinja'
-      },
-    ]
-  };
-
+  
+  
   final Map<String, dynamic> _config = {
     'mandatory': {},
     'optional': [
@@ -224,6 +217,14 @@ class Signaling {
 
     if (mapData['request'] == "offerSDP") {
       var uuid = mapData['UUID'];
+	  
+	   Map<String, dynamic> configuration = {
+		'sdpSemantics': "unified-plan",
+		'iceServers': this.TURNLIST
+	  };
+
+	  print("**************** configuration TO BE USED");
+	  print(configuration);
 
       RTCPeerConnection pc = await createPeerConnection(configuration, _config);
       _sessionID[uuid] = new DateTime.now().toString();
