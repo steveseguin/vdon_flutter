@@ -1,0 +1,12 @@
+module path_provider_foundation {
+  umbrella header "path_provider_foundation-umbrella.h"
+
+  export *
+  module * { export * }
+}
+
+
+module path_provider_foundation.Swift {
+  header "/Users/steveseguin/Code/vdon_flutter/ios/build/Debug-iphoneos/path_provider_foundation/Swift Compatibility Header/path_provider_foundation-Swift.h"
+  requires objc
+}

@@ -1,8 +1,8 @@
 PODS:
   - Flutter (1.0.0)
-  - flutter_webrtc (0.9.31):
+  - flutter_webrtc (0.9.36):
     - Flutter
-    - WebRTC-SDK (= 114.5735.01)
+    - WebRTC-SDK (= 114.5735.02)
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -17,7 +17,7 @@ PODS:
     - Flutter
   - wakelock (0.0.1):
     - Flutter
-  - WebRTC-SDK (114.5735.01)
+  - WebRTC-SDK (114.5735.02)
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
 
@@ -58,14 +58,14 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: f04841e97a9d0b0a8025694d0796dd46242b2854
-  flutter_webrtc: 085e95e9aba0f49176e315d5dd580ad4287d3c00
-  path_provider_foundation: eaf5b3e458fc0e5fbb9940fb09980e853fe058b8
+  flutter_webrtc: 1944895d4e908c4bc722929dc4b9f8620d8e1b2f
+  path_provider_foundation: 29f094ae23ebbca9d3d0cec13889cd9060c0e943
   permission_handler_apple: e76247795d700c14ea09e3a2d8855d41ee80a2e6
   share: 0b2c3e82132f5888bccca3351c504d0003b3b410
   shared_preferences_foundation: 5b919d13b803cadd15ed2dc053125c68730e5126
   url_launcher_ios: 08a3dfac5fb39e8759aeb0abbd5d9480f30fc8b4
   wakelock: d0fc7c864128eac40eba1617cb5264d9c940b46f
-  WebRTC-SDK: 31abfb47b8e9ed5e27a2c46baa61015587dda966
+  WebRTC-SDK: dd913fd31cfbf1d43b9a22d83f4c6354c960c623
   webview_flutter_wkwebview: 2e2d318f21a5e036e2c3f26171342e95908bd60a
 
 PODFILE CHECKSUM: cf0c950f7e9a456b4e325f5b8fc0f98906a3705a

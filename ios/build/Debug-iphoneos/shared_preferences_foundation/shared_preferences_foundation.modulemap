@@ -1,0 +1,12 @@
+module shared_preferences_foundation {
+  umbrella header "shared_preferences_foundation-umbrella.h"
+
+  export *
+  module * { export * }
+}
+
+
+module shared_preferences_foundation.Swift {
+  header "/Users/steveseguin/Code/vdon_flutter/ios/build/Debug-iphoneos/shared_preferences_foundation/Swift Compatibility Header/shared_preferences_foundation-Swift.h"
+  requires objc
+}

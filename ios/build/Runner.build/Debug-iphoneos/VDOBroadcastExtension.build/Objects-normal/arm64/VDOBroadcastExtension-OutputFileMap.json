@@ -1,0 +1,58 @@
+{
+  "" : {
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/VDOBroadcastExtension-master.dia",
+    "emit-module-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/VDOBroadcastExtension-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/VDOBroadcastExtension-master-emit-module.dia",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/VDOBroadcastExtension-master.swiftdeps"
+  },
+  "/Users/steveseguin/Code/vdon_flutter/ios/VDOBroadcastExtension/Atomic.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.dia",
+    "index-unit-output-path" : "/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/Atomic~partial.swiftmodule"
+  },
+  "/Users/steveseguin/Code/vdon_flutter/ios/VDOBroadcastExtension/DarwinNotificationCenter.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.dia",
+    "index-unit-output-path" : "/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/DarwinNotificationCenter~partial.swiftmodule"
+  },
+  "/Users/steveseguin/Code/vdon_flutter/ios/VDOBroadcastExtension/SampleHandler.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.dia",
+    "index-unit-output-path" : "/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleHandler~partial.swiftmodule"
+  },
+  "/Users/steveseguin/Code/vdon_flutter/ios/VDOBroadcastExtension/SampleUploader.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.dia",
+    "index-unit-output-path" : "/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SampleUploader~partial.swiftmodule"
+  },
+  "/Users/steveseguin/Code/vdon_flutter/ios/VDOBroadcastExtension/SocketConnection.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.dia",
+    "index-unit-output-path" : "/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/VDOBroadcastExtension.build/Objects-normal/arm64/SocketConnection~partial.swiftmodule"
+  }
+}

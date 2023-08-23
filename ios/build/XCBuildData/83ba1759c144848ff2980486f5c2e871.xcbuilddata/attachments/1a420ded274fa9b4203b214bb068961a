@@ -1,0 +1,28 @@
+{
+  "" : {
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/path_provider_foundation-master.dia",
+    "emit-module-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/path_provider_foundation-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/path_provider_foundation-master-emit-module.dia",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/path_provider_foundation-master.swiftdeps"
+  },
+  "/Users/steveseguin/.pub-cache/hosted/pub.dev/path_provider_foundation-2.3.0/darwin/Classes/messages.g.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.dia",
+    "index-unit-output-path" : "/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/messages.g~partial.swiftmodule"
+  },
+  "/Users/steveseguin/.pub-cache/hosted/pub.dev/path_provider_foundation-2.3.0/darwin/Classes/PathProviderPlugin.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.dia",
+    "index-unit-output-path" : "/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Pods.build/Debug-iphoneos/path_provider_foundation.build/Objects-normal/arm64/PathProviderPlugin~partial.swiftmodule"
+  }
+}

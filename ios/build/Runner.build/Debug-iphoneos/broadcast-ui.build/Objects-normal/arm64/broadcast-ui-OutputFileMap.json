@@ -1,0 +1,18 @@
+{
+  "" : {
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/broadcast-ui-master.dia",
+    "emit-module-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/broadcast-ui-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/broadcast-ui-master-emit-module.dia",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/broadcast-ui-master.swiftdeps"
+  },
+  "/Users/steveseguin/Code/vdon_flutter/ios/broadcast-ui/BroadcastSetupViewController.swift" : {
+    "const-values" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.swiftconstvalues",
+    "dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.d",
+    "diagnostics" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.dia",
+    "index-unit-output-path" : "/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.o",
+    "llvm-bc" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.bc",
+    "object" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.o",
+    "swift-dependencies" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController.swiftdeps",
+    "swiftmodule" : "/Users/steveseguin/Code/vdon_flutter/ios/build/Runner.build/Debug-iphoneos/broadcast-ui.build/Objects-normal/arm64/BroadcastSetupViewController~partial.swiftmodule"
+  }
+}
