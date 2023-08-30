@@ -52,6 +52,7 @@ String roomID = "";
 String password = "";
 bool quality = false;
 bool advanced = false;
+bool landscape = false;
 String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
 
@@ -189,8 +190,12 @@ class _MyAppState extends State<MyApp> {
 	TURNSERVER = _prefs.getString('TURNSERVER') ?? TURNSERVER;
 
     try {
-      quality = _prefs.getBool('resolution') ?? false;
+		quality = _prefs.getBool('resolution') ?? false;
     } catch (e) {}
+	
+	try {
+		landscape = _prefs.getBool('landscape') ?? false;
+	} catch(e){}
 
     if (streamID == "") {
       var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
@@ -237,6 +242,7 @@ class _MyAppState extends State<MyApp> {
 					deviceID: _deviceID,
 					roomID: roomID,
 					quality: quality,
+					landscape:landscape,
 					WSSADDRESS: WSSADDRESS,
 					TURNSERVER: TURNSERVER,
 					muted: false,
@@ -272,15 +278,13 @@ class _MyAppState extends State<MyApp> {
                   },
                   decoration: InputDecoration(
                     hintText: streamID,
-                    labelText: 'Stream ID (auto-generated if empty)',
-					border: InputBorder.none
+                    labelText: 'Stream ID (auto-generated if empty)'
                   ),
-                  textAlign: TextAlign.center,
-				  style: Theme.of(context).textTheme.bodyText1,
+                  textAlign: TextAlign.center
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 50, 0, 0),
+                padding: const EdgeInsets.fromLTRB(0, 55, 0, 0),
                 child: TextField(
                   controller: TextEditingController()..text = roomID ?? "",
                   onChanged: (String text) {
@@ -296,8 +300,17 @@ class _MyAppState extends State<MyApp> {
                   textAlign: TextAlign.center,
                 ),
               ),
+			   Padding(
+                padding: const EdgeInsets.fromLTRB(0, 125, 0, 0),
+                child: Text(
+                  '(Passwords not yet supported)',
+                  style: TextStyle(
+                      color: Color.fromARGB(255, 188, 188, 188), fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 100, 0, 0),
+                padding: const EdgeInsets.fromLTRB(0, 133, 0, 0),
                 child: SwitchListTile(
                     title: const Text('Prefer 1080p'),
                     value: quality,
@@ -310,20 +323,26 @@ class _MyAppState extends State<MyApp> {
                       });
                     }),
               ),
-			  
 			  Padding(
-                padding: const EdgeInsets.fromLTRB(0, 145, 0, 0),
-                child: Text(
-                  '(Passwords not yet supported)',
-                  style: TextStyle(
-                      color: Color.fromARGB(255, 188, 188, 188), fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
+                padding: const EdgeInsets.fromLTRB(0, 173, 0, 0),
+                child: SwitchListTile(
+                    title: const Text('Force landscape'),
+                    value: landscape,
+                    onChanged: (bool value) {
+                      _prefs.setBool('landscape', value);
+                      setState(() {
+                        landscape = value;
+                        Navigator.pop(context);
+                        _showAddressDialog(context);
+                      });
+                    }),
               ),
+			  
+			 
 			  
 			  if (!advanced)
 			   Padding(
-                padding: const EdgeInsets.fromLTRB(0, 160, 0, 0),
+                padding: const EdgeInsets.fromLTRB(0, 213, 0, 0),
                 child: SwitchListTile(
                     title: const Text('Advanced'),
                     value: advanced,
@@ -339,7 +358,7 @@ class _MyAppState extends State<MyApp> {
 			  
 			  if (advanced)
 				Padding(
-					padding: const EdgeInsets.fromLTRB(0, 170, 0, 0),
+					padding: const EdgeInsets.fromLTRB(0, 233, 0, 0),
 					child: TextField(
 					  onChanged: (String text) {
 						setState(() {
@@ -356,7 +375,7 @@ class _MyAppState extends State<MyApp> {
 				),
 			if (advanced)
 				Padding(
-					padding: const EdgeInsets.fromLTRB(0, 235, 0, 0),
+					padding: const EdgeInsets.fromLTRB(0, 288, 0, 0), 
 					child: TextField(
 					  onChanged: (String text) {
 						setState(() {

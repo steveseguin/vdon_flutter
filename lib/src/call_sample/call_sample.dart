@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:share/share.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/services.dart';
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
@@ -15,6 +16,7 @@ class CallSample extends StatefulWidget {
   final String WSSADDRESS;
   final String TURNSERVER;
   final bool quality;
+  final bool landscape;
   final bool preview;
   final bool muted;
   final bool mirrored;
@@ -25,6 +27,7 @@ class CallSample extends StatefulWidget {
       required this.deviceID,
       required this.roomID,
       required this.quality,
+	  required this.landscape,
 	  required this.WSSADDRESS,
 	  required this.TURNSERVER,
       required this.preview,
@@ -69,9 +72,23 @@ class _CallSampleState extends State<CallSample> {
 	_signaling.close();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
+	
+	SystemChrome.setPreferredOrientations([
+		DeviceOrientation.landscapeRight,
+		DeviceOrientation.landscapeLeft,
+		DeviceOrientation.portraitUp,
+		DeviceOrientation.portraitDown,
+	  ]);
   }
 
   void _connect() async {
+  
+		if (widget.landscape){
+			SystemChrome.setPreferredOrientations([
+				  DeviceOrientation.landscapeRight,
+				  DeviceOrientation.landscapeLeft,
+			  ]);
+		}
   
 		 var TURNLIST = [
 			  {'url': 'stun:stun.l.google.com:19302'},
@@ -231,6 +248,7 @@ class _CallSampleState extends State<CallSample> {
 
     _localRenderer.srcObject = null;
     _remoteRenderer.srcObject = null;
+	
     Navigator.of(context).pop();
   }
 
