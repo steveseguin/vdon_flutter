@@ -39,6 +39,8 @@ class CallSample extends StatefulWidget {
   _CallSampleState createState() => _CallSampleState();
 }
 
+
+
 class _CallSampleState extends State<CallSample> {
   late Signaling _signaling;
   List<dynamic> _peers = [];
@@ -50,6 +52,7 @@ class _CallSampleState extends State<CallSample> {
   bool torch = false;
   bool preview = true;
   bool mirrored = true;
+  double totalZoomLevel = 1.0;
 
   // ignore: unused_element
   _CallSampleState();
@@ -256,6 +259,16 @@ class _CallSampleState extends State<CallSample> {
     _signaling.switchCamera();
     
   }
+  
+  _zoomCamera(double zoomLevel) {
+	  totalZoomLevel = totalZoomLevel-zoomLevel;
+	  if (totalZoomLevel<1.0){
+		  totalZoomLevel = 1.0;
+	  } else if (totalZoomLevel>20.0){
+		  totalZoomLevel = 20.0;
+	  }
+    _signaling.zoomCamera(totalZoomLevel);
+  }
 
   _toggleFlashlight() async {
     setState(() {
@@ -370,7 +383,7 @@ class _CallSampleState extends State<CallSample> {
           elevation: 2,
           padding: EdgeInsets.all(15),
         ));
-
+		
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
@@ -439,17 +452,28 @@ class _CallSampleState extends State<CallSample> {
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
-          children: [
+          children: [  
             Expanded(
               child: Stack(alignment: Alignment.bottomCenter, children: [
                 widget.deviceID != 'screen'
                     ? widget.deviceID != 'microphone'
-						? RTCVideoView(
-							_localRenderer,
-							objectFit:
-								RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-							mirror: mirrored,
-						  )
+						? GestureDetector(
+							  onVerticalDragUpdate: (details) {
+								double delta = details.primaryDelta ?? 0.0;
+								if (delta > 0) {
+								  // User is swiping down, zoom out
+								  _zoomCamera(0.04); // Adjust the zoom factor as needed
+								} else if (delta < 0) {
+								  // User is swiping up, zoom in
+								  _zoomCamera(-0.04); // Adjust the zoom factor as needed
+								}
+							  },
+							  child: RTCVideoView(
+								_localRenderer,
+								objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+								mirror: widget.deviceID == "rear" || widget.deviceID == "environment" || widget.deviceID.contains("0") ? !mirrored : mirrored
+							  ),
+							)
 						: Container(
 							color: Theme.of(context).canvasColor,
 							child: Column(

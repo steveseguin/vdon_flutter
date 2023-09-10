@@ -85,7 +85,7 @@ class Signaling {
   var WSSADDRESS = 'wss://wss.vdo.ninja:443';
   var UUID = "";
   var TURNLIST = [];
-
+  
   Signaling (_streamID, _deviceID, _roomID, _quality, _WSSADDRESS, _TURNLIST) {
     // INIT CLASS
 
@@ -167,6 +167,10 @@ class Signaling {
   void switchCamera() {
       Helper.switchCamera(_localStream.getVideoTracks()[0]);
     
+  }
+
+  void zoomCamera(double zoomLevel) {
+	  Helper.setZoom(_localStream.getVideoTracks()[0], zoomLevel);
   }
 
   toggleTorch(torch) async {
@@ -527,6 +531,11 @@ class Signaling {
       });
 	}
     }
+	
+	//var videoTrack = stream!.getVideoTracks().firstWhere((track) => track.kind == 'video');
+	//if (videoTrack){
+	//	WebRTC.invokeMethod('mediaStreamTrackSetZoom',<String, dynamic>{'trackId': videoTrack.id, 'zoomLevel': 1.0});
+	//}
 	
     onLocalStream?.call(stream);
     return stream;
