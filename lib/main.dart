@@ -1,3 +1,5 @@
+// Importing the CameraManager class to use it in the application
+import 'src/utils/camera_manager.dart';
 import 'dart:core';
 
 import 'package:flutter/foundation.dart'
