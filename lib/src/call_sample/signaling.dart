@@ -8,7 +8,6 @@ import 'dart:core';
 import 'dart:io' show Platform;
 import 'package:tuple/tuple.dart';
 import 'dart:typed_data';
-import 'package:encrypt/encrypt.dart';
 import 'package:crypto/crypto.dart';
 
 
@@ -25,6 +24,27 @@ enum CallState {
   CallStateConnected,
   CallStateBye,
 }
+
+String bytesToHex(List<int> bytes) {
+  return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+}
+
+String generateHash(String inputStr, [int? length]) {
+  // Convert the input string to bytes
+  List<int> inputBytes = utf8.encode(inputStr);
+
+  // Calculate the SHA-256 hash of the input bytes
+  Digest sha256Hash = sha256.convert(inputBytes);
+
+  // If a length is provided, truncate the hash to that length
+  if (length != null) {
+    List<int> hashBytes = sha256Hash.bytes.sublist(0, length ~/ 2);
+    return bytesToHex(hashBytes);
+  } else {
+    return bytesToHex(sha256Hash.bytes);
+  }
+}
+
 
 /* Tuple2<String, IV> encryptMessage(String message,  {String? phrase}) {
   final phraseToUse = phrase ?? 'someEncryptionKey123vdo.ninja';
@@ -79,14 +99,16 @@ typedef void DataChannelCallback(RTCDataChannel dc);
 class Signaling {
   var streamID = "";
   var deviceID = "screen";
+  var hashcode = "";
   var roomID = "";
   var quality = false;
   var active = false;
   var WSSADDRESS = 'wss://wss.vdo.ninja:443';
   var UUID = "";
   var TURNLIST = [];
+  var audioDeviceId = "default";
   
-  Signaling (_streamID, _deviceID, _roomID, _quality, _WSSADDRESS, _TURNLIST) {
+  Signaling (_streamID, _deviceID, _audioDeviceId, _roomID, _quality, _WSSADDRESS, _TURNLIST, _password) {
     // INIT CLASS
 
 	_streamID = _streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
@@ -94,17 +116,21 @@ class Signaling {
 
     this.streamID = _streamID;
     this.deviceID = _deviceID;
+	this.audioDeviceId = _audioDeviceId;
     this.roomID = _roomID;
     this.quality = _quality;
 	this.WSSADDRESS = _WSSADDRESS;
 	this.TURNLIST = _TURNLIST;
 	
-	print("1111111111111111111111111111111111111111111111111111111111111111111111");
-	print("1111111111111111111111111111111111111111111111111111111111111111111111");
-	print("1111111111111111111111111111111111111111111111111111111111111111111111");
-	print("1111111111111111111111111111111111111111111111111111111111111111111111");
-	print(this.TURNLIST );
-
+	if ((_password == "0") || (_password == "false") || (_password == "off")){
+		this.hashcode = "";
+	} else if (_password!=""){
+		this.hashcode = generateHash(_password+"vdo.ninja", 6);
+	} else {
+		this.hashcode = "";
+	}
+	print("HASH CODE");
+	print(this.hashcode);
 	
 	if (this.WSSADDRESS != "wss://wss.vdo.ninja:443") {
 	  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
@@ -116,6 +142,56 @@ class Signaling {
 	}
 	
   }
+  
+  
+   Future<void> changeAudioSource(String audioDeviceId) async {
+		  // Get a new stream with the selected audio device
+		  final newLocalStream = await navigator.mediaDevices.getUserMedia({
+			'audio': {
+			  'deviceId': audioDeviceId,
+			},
+			'video': false,
+		  });
+
+		 var newAudioTrack = newLocalStream.getAudioTracks()[0];
+
+		// Replace the audio track in each peer connection session
+		for (var session in _sessions.values) {
+			var senders = await session.getSenders(); 
+
+			for (var sender in senders) {
+				if (sender.track?.kind == 'audio') {
+					await sender.replaceTrack(newAudioTrack);
+				}
+			}
+		}
+
+		// Safely remove the old audio track from the local stream
+		if (_localStream.getAudioTracks().isNotEmpty) {
+			var oldAudioTrack = _localStream.getAudioTracks()[0];
+			if (oldAudioTrack != null) {
+				_localStream.removeTrack(oldAudioTrack);
+				oldAudioTrack.stop();
+			}
+		}
+		
+		  // Update the local stream
+		  _localStream.addTrack(newAudioTrack);
+	}
+
+	Future<MediaStreamTrack> _createNewAudioTrack(String deviceId) async {
+		
+		final constraints = <String, dynamic>{
+			'audio': {
+			  'deviceId': deviceId,
+			},
+		};
+		print(constraints);
+		final mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+		final audioTrack = mediaStream.getAudioTracks()[0];
+		print("Selected audio track: ${audioTrack.label}");
+		return audioTrack;
+	}
 
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
@@ -174,11 +250,9 @@ class Signaling {
   }
 
   toggleTorch(torch) async {
-      final videoTrack = _localStream
-          .getVideoTracks()
-          .firstWhere((track) => track.kind == "video");
-
       try {
+		final videoTrack = _localStream.getVideoTracks().firstWhere((track) => track.kind == "video");
+		
         if (await videoTrack.hasTorch()) {
           await videoTrack.setTorch(torch);
           return true;
@@ -195,7 +269,6 @@ class Signaling {
   void muteMic() {
       bool enabled = _localStream.getAudioTracks()[0].enabled;
       _localStream.getAudioTracks()[0].enabled = !enabled;
-    
   }
 
   void invite(peerId, video, useScreen) {}
@@ -205,12 +278,12 @@ class Signaling {
   void onMessage(message) async {
     Map<String, dynamic> mapData = message;
 
-    print(message);
+    // print(message);
 	
 	if (mapData.containsKey('from')){
 		mapData['UUID'] = mapData['from'];
 		if (mapData.containsKey("request") && (mapData['request'] == "play") && mapData.containsKey("streamID")){
-			if (mapData['streamID'] == streamID){
+			if (mapData['streamID'] == streamID+hashcode){
 				mapData['request'] = "offerSDP";
 			} else {
 				return;
@@ -260,7 +333,7 @@ class Signaling {
         };
         request["type"] = "local";
         request["session"] = _sessionID[uuid];
-        request["streamID"] = streamID;
+        request["streamID"] = streamID+hashcode;
 
         // request["roomID"] = roomID;
 		if (!UUID.isEmpty){
@@ -306,7 +379,7 @@ class Signaling {
             candidateMap[i]['candidate'],
             candidateMap[i]['sdpMid'],
             candidateMap[i]['sdpMLineIndex']);
-        print(candidateMap[i]);
+        // print(candidateMap[i]);
         if (_sessions[mapData['UUID']] != null) {
           await _sessions[mapData['UUID']].addCandidate(candidate);
         }
@@ -314,10 +387,8 @@ class Signaling {
     }
   }
 
-  Future<void> connect() async {
-    _localStream = await createStream(true, deviceID);
-    
-
+  Future<void> connect() async { 
+    _localStream = await createStream(true, deviceID, audioDeviceId);
     active=true;
 
 	if (UUID.isEmpty && WSSADDRESS != "wss://wss.vdo.ninja:443") {
@@ -337,7 +408,9 @@ class Signaling {
 
       var request = Map();
       request["request"] = "seed";
-      request["streamID"] = streamID;
+      request["streamID"] = streamID+hashcode;
+	  
+	 
 		
 		if (!UUID.isEmpty){
 		  request["from"] = UUID;
@@ -358,7 +431,7 @@ class Signaling {
     };
 
     _socket.onMessage = (message) {
-      print('Received data: ' + message);
+      // print('Received data: ' + message);
       onMessage(_decoder.convert(message));
     };
 
@@ -367,14 +440,14 @@ class Signaling {
       onSignalingStateChange.call(SignalingState.ConnectionClosed);
       if (active==true){
 	    UUID = "";
-        _socket.connect(streamID, WSSADDRESS, UUID);
+        _socket.connect(streamID+hashcode, WSSADDRESS, UUID);
       }
     };
 
-    await _socket.connect(streamID, WSSADDRESS, UUID);
+    await _socket.connect(streamID+hashcode, WSSADDRESS, UUID);
   }
 
-  Future<MediaStream> createStream(bool userScreen, String deviceID) async {
+  Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
 
     String width = "1280";
     String height = "720";
@@ -385,6 +458,10 @@ class Signaling {
       height = "1080";
     }
      String framerate = "60";
+
+	print("AUDIO DEVICE");
+	print(audioDeviceId);
+	print(deviceID);
 
     if (deviceID == "screen") {
       if (Platform.isIOS){
@@ -402,6 +479,7 @@ class Signaling {
       if (stream.getAudioTracks().length == 0) {
         audioStream = await navigator.mediaDevices.getUserMedia({
           'audio': {
+			//'deviceId': audioDeviceId,
             'mandatory': {
               'googEchoCancellation': false,
               'echoCancellation': false,
@@ -410,51 +488,54 @@ class Signaling {
             }
           }
         });
+		
         audioStream.getAudioTracks().forEach((element) async {
           await stream.addTrack(element);
         });
       }
-    } else if (deviceID == "front" ||
-        deviceID.contains("1") ||
-        deviceID == "user") {
+    } else if (deviceID == "front" ||  deviceID.contains("1") || deviceID == "user") {
+		print("SSSSSSSSSSSSSSSSSSSSSSSSSSSS");
 		if (quality){
-        stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': {
-          'facingMode': 'user',
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-          }
-        }
-      });
+			stream = await navigator.mediaDevices.getUserMedia({
+			'audio': {
+			  //'deviceId': audioDeviceId,
+			  'mandatory': {
+				'googEchoCancellation': false,
+				'echoCancellation': false
+			  }
+			},
+			'video': {
+			  'facingMode': 'user',
+			  'mandatory': {
+				'minWidth': width,
+				'minHeight': height,
+			  }
+			}
+		  });
 		} else{
-
-			 stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': {
-          'facingMode': 'user',
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-            'frameRate': framerate
-          }
-        }
-      });
+			stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				 // 'deviceId': audioDeviceId,
+				  'mandatory': {
+					'googEchoCancellation': false,
+					'echoCancellation': false
+				  }
+				},
+				'video': {
+				  'facingMode': 'user',
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+					'frameRate': framerate
+				  }
+				}
+			});
 		}
+	
 	 } else if (deviceID == "microphone") {
        stream = await navigator.mediaDevices.getUserMedia({
         'audio': {
+		 // 'deviceId': audioDeviceId,
           'mandatory': {
             'googEchoCancellation': false,
             'echoCancellation': false
@@ -462,74 +543,79 @@ class Signaling {
         },
         'video': false
         });
-    } else if (deviceID == "rear" ||
-        deviceID == "environment" ||
-        deviceID.contains("0")) {
-	if (quality){
-      stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': {
-          'facingMode': 'environment',
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-          }
-        }
-      });
-    } else {
-		stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': {
-          'facingMode': 'environment',
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-            'frameRate': framerate
-          }
-        }
-      });
+		
+    } else if (deviceID == "rear" ||  deviceID == "environment" || deviceID.contains("0")) {
+		print("00000000000000");
+		if (quality){
+		  stream = await navigator.mediaDevices.getUserMedia({
+			'audio': {
+			//  'deviceId': audioDeviceId,
+			  'mandatory': {
+				'googEchoCancellation': false,
+				'echoCancellation': false
+			  }
+			},
+			'video': {
+			  'facingMode': 'environment',
+			  'mandatory': {
+				'minWidth': width,
+				'minHeight': height,
+			  }
+			}
+		  });
+		} else {
+			stream = await navigator.mediaDevices.getUserMedia({
+			'audio': {
+			//  'deviceId': audioDeviceId,
+			  'mandatory': {
+				'googEchoCancellation': false,
+				'echoCancellation': false
+			  }
+			},
+			'video': {
+			  'facingMode': 'environment',
+			  'mandatory': {
+				'minWidth': width,
+				'minHeight': height,
+				'frameRate': framerate
+			  }
+			}
+		  });
 
-	}
+		}
+		
     } else {
       //var devices =  await navigator.mediaDevices.enumerateDevices();
       if (quality){
-      stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
-        },
-        'video': {
-          'deviceId': deviceID,
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-          }
-        }
-      });
-	} else {
-		stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
-        },
-        'video': {
-          'deviceId': deviceID,
-          'mandatory': {
-            'minWidth': width,
-            'minHeight': height,
-			'frameRate': framerate
-          }
-        }
-      });
-	}
+		  stream = await navigator.mediaDevices.getUserMedia({
+			'audio': {
+			//  'deviceId': audioDeviceId,
+			  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+			},
+			'video': {
+			  'deviceId': deviceID,
+			  'mandatory': {
+				'minWidth': width,
+				'minHeight': height,
+			  }
+			}
+		  });
+		} else {
+			stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+			//	  'deviceId': audioDeviceId,
+				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+				},
+				'video': {
+				  'deviceId': deviceID,
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+					'frameRate': framerate
+				  }
+				}
+			  });
+		}
     }
 	
 	//var videoTrack = stream!.getVideoTracks().firstWhere((track) => track.kind == 'video');
@@ -538,6 +624,13 @@ class Signaling {
 	//}
 	
     onLocalStream?.call(stream);
+	
+	final audioTracks = stream.getAudioTracks();
+	if (audioTracks.isNotEmpty) {
+	  final audioTrack = audioTracks.first;
+	  print("Audio Track Label: ${audioTrack.label}");
+	}
+	
     return stream;
   }
 
@@ -567,7 +660,7 @@ class Signaling {
       request["UUID"] = uuid;
       request["description"] = {'sdp': s.sdp, 'type': s.type};
       request["session"] = _sessionID[uuid];
-      request["streamID"] = streamID;
+      request["streamID"] = streamID+hashcode;
 	  if (!UUID.isEmpty){
 		  request["from"] = UUID;
 		}
@@ -586,7 +679,7 @@ class Signaling {
       request["UUID"] = uuid;
       request["description"] = {'sdp': s.sdp, 'type': s.type};
       request["session"] = _sessionID[uuid];
-      request["streamID"] = streamID;
+      request["streamID"] = streamID+hashcode;
 	  if (!UUID.isEmpty){
 		  request["from"] = UUID;
 		}

@@ -12,9 +12,11 @@ class CallSample extends StatefulWidget {
 
   final String streamID;
   final String deviceID;
+  final String audioDeviceId;
   final String roomID;
   final String WSSADDRESS;
   final String TURNSERVER;
+  final String password;
   final bool quality;
   final bool landscape;
   final bool preview;
@@ -25,11 +27,13 @@ class CallSample extends StatefulWidget {
       {required Key key,
       required this.streamID,
       required this.deviceID,
+	  required this.audioDeviceId,
       required this.roomID,
       required this.quality,
 	  required this.landscape,
 	  required this.WSSADDRESS,
 	  required this.TURNSERVER,
+	  required this.password,
       required this.preview,
       required this.muted,
       required this.mirrored})
@@ -53,6 +57,10 @@ class _CallSampleState extends State<CallSample> {
   bool preview = true;
   bool mirrored = true;
   double totalZoomLevel = 1.0;
+  
+ // String _selectedMicrophoneId = '';
+  
+  //List<MediaDeviceInfo> _microphones = [];
 
   // ignore: unused_element
   _CallSampleState();
@@ -62,7 +70,22 @@ class _CallSampleState extends State<CallSample> {
     super.initState();
     initRenderers();
     _connect();
+    //_enumerateMicrophones(); // New method to enumerate microphones
   }
+  
+ /*  _enumerateMicrophones() async {
+    final devices = await navigator.mediaDevices.enumerateDevices();
+    setState(() {
+      _microphones = devices.where((d) => d.kind == 'audioinput').toList();
+	  print("MICROPHONE LIST");
+	  print(_microphones);
+      if (_microphones.isNotEmpty) {
+		_selectedMicrophoneId = _microphones.first.deviceId;
+		print(_microphones.first.deviceId);
+		print(_microphones.first.label);
+      }
+    });
+  } */
 
   initRenderers() async {
     await _localRenderer.initialize();
@@ -107,7 +130,6 @@ class _CallSampleState extends State<CallSample> {
 			  }
 		  ];
   
-  
 		if (widget.TURNSERVER=="" || widget.TURNSERVER == "un;pw;turn:turn.x.co:3478"){ // assume they are using the defaults
 			  try {
 				final uri = await Uri.parse("https://turnservers.vdo.ninja/?flutter="+DateTime.now().microsecondsSinceEpoch.toString());
@@ -116,13 +138,13 @@ class _CallSampleState extends State<CallSample> {
 				if (response.statusCode == 200){
 					var TURNLIST = jsonDecode(response.body)['servers'];
 					TURNLIST.add({'url': 'stun:stun.l.google.com:19302'});
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 				} else {
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 				}
 			  } on Exception catch (_) {
 					print("using default hard coded turn list");
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 			  }
 		  } else if (widget.TURNSERVER.startsWith("https://") || widget.TURNSERVER.startsWith("http://")){ // assume they are using the defaults
 			  try {
@@ -130,13 +152,13 @@ class _CallSampleState extends State<CallSample> {
 				final response = await http.get(uri); 
 				if (response.statusCode == 200){
 					var TURNLIST = jsonDecode(response.body)['servers'];
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 				} else {
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 				}
 			  } on Exception catch (_) {
 					print("using default hard coded turn list");
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 			  } 
 		  } else {
 				var customturn = widget.TURNSERVER.split(";");
@@ -148,36 +170,36 @@ class _CallSampleState extends State<CallSample> {
 						'username': customturn[0],
 						'credential': customturn[1]
 					  });
-					  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 				} else if (customturn.length==1){
 					
 					if (customturn[0].startsWith("stun:")){
 						var TURNLIST  = [{'url': customturn[0]}];
-						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 					} else if (customturn[0].startsWith("turn:")){
 						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
 						TURNLIST.add({
 							'url': customturn[0]
 						  });
-						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 					} else if (customturn[0].startsWith("turns:")){
 						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
 						TURNLIST.add({
 							'url': customturn[0]
 						  });
-						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 					} else if (customturn[0]=="false" || customturn[0]=="0" || customturn[0]=="off" || customturn[0]=="none"){
 						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
-						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 					} else {
 						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
 						TURNLIST.add({
 							'url': customturn[0]
 						  });
-						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 					}
 				} else{
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST);
+					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
 				}
 		  }
   
@@ -327,15 +349,21 @@ class _CallSampleState extends State<CallSample> {
   @override
   Widget build(BuildContext context) {
 
+	String tmp = "https://vdo.ninja/?v=" + widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+	
 
-    String tmp = "https://vdo.ninja/?v=" + widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') + "&p=0";
     if (widget.roomID != "") {
       tmp = "https://vdo.ninja/?v=" +
           widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') +
           "&r=" +
           widget.roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') +
-          "&scn&p=0";
+          "&scn";
     }
+	if ((widget.password == "0") || (widget.password == "false") || (widget.password == "off") || (widget.password == "")){
+		tmp += "&p=0";
+	} else if (widget.password != "someEncryptionKey123"){
+		tmp = "https://vdo.ninja/?v=" + widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') + "&p="+widget.password;
+	}
 	
 	if ( widget.WSSADDRESS != 'wss://wss.vdo.ninja:443')
 		tmp = tmp + "&wss=" + Uri.encodeComponent(widget.WSSADDRESS.replaceAll("wss://",""));
@@ -343,20 +371,70 @@ class _CallSampleState extends State<CallSample> {
     final vdonLink = tmp;
     final key = new GlobalKey<ScaffoldState>();
 
+	
+
     Widget callControls() {
       double buttonWidth = 60;
       List<Widget> buttons = [];
 
-      buttons.add(RawMaterialButton(
-        constraints: BoxConstraints(minWidth: buttonWidth),
-        visualDensity: VisualDensity.comfortable,
-        onPressed: () => {_toggleMic()},
-        fillColor: muted ? Colors.red : Colors.green,
-        child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
-        shape: CircleBorder(),
-        elevation: 2,
-        padding: EdgeInsets.all(15),
-      ));
+     /*  if (_microphones.length > 1) {
+		  buttons.add(
+			Stack(
+			  alignment: Alignment.center,
+			  children: [
+				RawMaterialButton(
+				  constraints: BoxConstraints(minWidth: buttonWidth),
+				  visualDensity: VisualDensity.comfortable,
+				  onPressed: () => {_toggleMic()},
+				  fillColor: muted ? Colors.red : Colors.green,
+				  child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
+				  shape: CircleBorder(),
+				  elevation: 2,
+				  padding: EdgeInsets.all(15),
+				),
+				Positioned(
+				  top: -11, // Adjust this value as needed
+				  right: -11, // Adjust this value as needed
+				  child: Container(
+					padding: EdgeInsets.only(top: 10, right: 10), // Add padding to prevent cropping
+					child: PopupMenuButton<String>(
+					  onSelected: (String newValue) {
+						setState(() {
+						  _selectedMicrophoneId = newValue;
+						  _signaling.changeAudioSource(_selectedMicrophoneId);
+						});
+					  },
+					  itemBuilder: (BuildContext context) {
+						return _microphones.map((MediaDeviceInfo device) {
+						  return PopupMenuItem<String>(
+							value: device.deviceId,
+							child: Text(device.label),
+						  );
+						}).toList();
+					  },
+					  child: Icon(Icons.arrow_drop_down_circle, color: Colors.white, size: 20), // Adjust size as needed
+					),
+				  ),
+				),
+			  ],
+			),
+		  );
+		} else { */
+		  // Add the original mute button if there's only one microphone source
+		  buttons.add(
+			RawMaterialButton(
+			  constraints: BoxConstraints(minWidth: buttonWidth),
+			  visualDensity: VisualDensity.comfortable,
+			  onPressed: () => {_toggleMic()},
+			  fillColor: muted ? Colors.red : Colors.green,
+			  child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
+			  shape: CircleBorder(),
+			  elevation: 2,
+			  padding: EdgeInsets.all(15),
+			),
+		  );
+		//}
+	  
 
 	  if (widget.deviceID == 'microphone') { 
 		//
@@ -400,8 +478,7 @@ class _CallSampleState extends State<CallSample> {
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_toggleFlashlight()},
           fillColor: !torch ? Colors.red : Colors.green,
-          child:
-              !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
+          child: !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
           shape: CircleBorder(),
           elevation: 2,
           padding: EdgeInsets.all(15),
@@ -537,6 +614,7 @@ class _CallSampleState extends State<CallSample> {
                     ),
                   ),
                 ),
+				
                 callControls(),
               ]),
             ),

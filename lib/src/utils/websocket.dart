@@ -48,7 +48,7 @@ class SimpleWebSocket {
     send(data) {
         if (_socket != null) {
             _socket.add(data);
-            print('send: $data');
+            //print('send: $data');
         }
     }
 
@@ -63,8 +63,7 @@ class SimpleWebSocket {
             HttpClient client = HttpClient(context: SecurityContext());
             client.badCertificateCallback =
                     (X509Certificate cert, String host, int port) {
-                print(
-                        'SimpleWebSocket: Allow self-signed certificate => $host:$port. ');
+               // print('SimpleWebSocket: Allow self-signed certificate => $host:$port. ');
                 return true;
             };
 
