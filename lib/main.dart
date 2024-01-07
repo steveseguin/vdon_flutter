@@ -13,6 +13,23 @@ import 'package:wakelock/wakelock.dart';
 import 'package:flutter_background/flutter_background.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io' show Platform;
+
+Future<bool> isIosVersionSupported() async {
+  DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+  IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+  String systemVersion = iosInfo.systemVersion ?? '0';
+
+  // Compare the current iOS version with the minimum required version (16.4)
+  if (double.tryParse(systemVersion) != null && double.parse(systemVersion) < 16.4) {
+    return false;
+  }
+
+  return true;
+}
+
+
 void main() {
   if (WebRTC.platformIsDesktop) {
     debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
@@ -438,15 +455,44 @@ class _MyAppState extends State < MyApp > {
           ]));
   }
   _initItems() async {
+	  
     items = < RouteItem > [];
-    items.add(RouteItem(
-      title: 'SCREEN',
-      subtitle: 'Share your device\'s screen',
-      icon: Icons.screen_share,
-      push: (BuildContext context) {
-        _deviceID = "screen";
-        _showAddressDialog(context);
-      }));
+	
+	if (Platform.isIOS) {
+		  bool versionSupported = await isIosVersionSupported();
+		  if (!versionSupported) {
+			
+			items.add(RouteItem(
+			  title: 'Update iOS to Screenshare',
+			  subtitle: 'Screenshare requires iOS 16.4 or newer',
+			  icon: Icons.screen_share,
+			  push: (BuildContext context) {
+				_deviceID = "screen";
+				_showAddressDialog(context);
+			  }));
+			
+			
+		  } else {
+			  items.add(RouteItem(
+				  title: 'SCREEN',
+				  subtitle: 'Share your device\'s screen',
+				  icon: Icons.screen_share,
+				  push: (BuildContext context) {
+					_deviceID = "screen";
+					_showAddressDialog(context);
+				  }));
+		  }
+	} else {
+		items.add(RouteItem(
+			  title: 'Update iOS to Screenshare',
+			  subtitle: 'Screenshare requires iOS 16.4 or newer',
+			  icon: Icons.screen_share,
+			  push: (BuildContext context) {
+				_deviceID = "screen";
+				_showAddressDialog(context);
+			  }));
+	}
+	  
     var devices = await navigator.mediaDevices.enumerateDevices();
 	
     for (var item in devices) {
