@@ -264,8 +264,10 @@ class _MyAppState extends State < MyApp > {
     showDemoDialog < DialogDemoAction > (
       context: context,
       child: AlertDialog(
-        title: const Text('Publishing settings'),
+          title: const Text('Publishing settings'),
           scrollable: true,
+		  backgroundColor: theme.cardTheme.color,
+		  surfaceTintColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           contentPadding: EdgeInsets.only(left: 10, right: 10, bottom: MediaQuery.of(context).viewInsets.bottom),
           content: SingleChildScrollView(
