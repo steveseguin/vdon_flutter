@@ -463,7 +463,7 @@ class _MyAppState extends State < MyApp > {
 		  if (!versionSupported) {
 			
 			items.add(RouteItem(
-			  title: '⚠️Update iOS to Screenshare',
+			  title: 'Update iOS to Screenshare',
 			  subtitle: 'Screensharing requires iOS 16.4 or newer',
 			  icon: Icons.screen_share,
 			  push: (BuildContext context) {
@@ -474,7 +474,7 @@ class _MyAppState extends State < MyApp > {
 			
 		  } else {
 			  items.add(RouteItem(
-				  title: '⚠️ SCREEN',
+				  title: 'SCREEN',
 				  subtitle: 'Share your device\'s screen',
 				  icon: Icons.screen_share,
 				  push: (BuildContext context) {
