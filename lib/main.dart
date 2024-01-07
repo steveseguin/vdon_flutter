@@ -474,13 +474,13 @@ class _MyAppState extends State < MyApp > {
 			
 		  } else {
 			  items.add(RouteItem(
-				  title: 'SCREEN',
-				  subtitle: 'Share your device\'s screen',
-				  icon: Icons.screen_share,
-				  push: (BuildContext context) {
-					_deviceID = "screen";
-					_showAddressDialog(context);
-				  }));
+			  title: 'Update iOS to Screenshare',
+			  subtitle: 'Screenshare requires iOS 16.4 or newer',
+			  icon: Icons.screen_share,
+			  push: (BuildContext context) {
+				_deviceID = "screen";
+				_showAddressDialog(context);
+			  }));
 		  }
 	} else {
 		items.add(RouteItem(
