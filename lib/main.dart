@@ -463,8 +463,8 @@ class _MyAppState extends State < MyApp > {
 		  if (!versionSupported) {
 			
 			items.add(RouteItem(
-			  title: 'Update iOS to Screenshare',
-			  subtitle: 'Screenshare requires iOS 16.4 or newer',
+			  title: '⚠️Update iOS to Screenshare',
+			  subtitle: 'Screensharing requires iOS 16.4 or newer',
 			  icon: Icons.screen_share,
 			  push: (BuildContext context) {
 				_deviceID = "screen";
@@ -474,23 +474,23 @@ class _MyAppState extends State < MyApp > {
 			
 		  } else {
 			  items.add(RouteItem(
-			  title: 'Update iOS to Screenshare',
-			  subtitle: 'Screenshare requires iOS 16.4 or newer',
-			  icon: Icons.screen_share,
-			  push: (BuildContext context) {
-				_deviceID = "screen";
-				_showAddressDialog(context);
-			  }));
+				  title: '⚠️ SCREEN',
+				  subtitle: 'Share your device\'s screen',
+				  icon: Icons.screen_share,
+				  push: (BuildContext context) {
+					_deviceID = "screen";
+					_showAddressDialog(context);
+				  }));
 		  }
 	} else {
 		items.add(RouteItem(
-			  title: 'Update iOS to Screenshare',
-			  subtitle: 'Screenshare requires iOS 16.4 or newer',
-			  icon: Icons.screen_share,
-			  push: (BuildContext context) {
-				_deviceID = "screen";
-				_showAddressDialog(context);
-			  }));
+		  title: 'SCREEN',
+		  subtitle: 'Share your device\'s screen',
+		  icon: Icons.screen_share,
+		  push: (BuildContext context) {
+			_deviceID = "screen";
+			_showAddressDialog(context);
+		  }));
 	}
 	  
     var devices = await navigator.mediaDevices.enumerateDevices();
