@@ -306,7 +306,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1430;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 1500;
 				ORGANIZATIONNAME = "The Chromium Authors";
 				TargetAttributes = {
 					97C146ED1CF9000F007C117D = {
@@ -702,7 +702,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.21;
+				CURRENT_PROJECT_VERSION = 2.0.22;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -716,7 +716,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.21;
+				MARKETING_VERSION = 2.0.22;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
@@ -741,7 +741,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.21;
+				CURRENT_PROJECT_VERSION = 2.0.22;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -755,7 +755,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.21;
+				MARKETING_VERSION = 2.0.22;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -779,7 +779,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.21;
+				CURRENT_PROJECT_VERSION = 2.0.22;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -793,7 +793,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.21;
+				MARKETING_VERSION = 2.0.22;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
@@ -818,7 +818,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.21;
+				CURRENT_PROJECT_VERSION = 2.0.22;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -832,7 +832,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.21;
+				MARKETING_VERSION = 2.0.22;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
