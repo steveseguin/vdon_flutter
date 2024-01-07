@@ -467,13 +467,25 @@ class Signaling {
       if (Platform.isIOS){
         stream = await navigator.mediaDevices.getDisplayMedia({
           'video': {
-            'deviceId': 'broadcast'
+            'deviceId': 'broadcast',
+			'mandatory': {
+				'maxWidth': width,
+				'maxHeight': width,
+				'frameRate': framerate
+			}
           }, 
           'audio': true
         });
       } else {
          stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': true, 'audio': true
+          'video': {
+			  'mandatory': {
+					'maxWidth': width,
+					'maxHeight': width,
+					'frameRate': framerate
+				},
+			  },			
+		   'audio': true
         });
       }
       if (stream.getAudioTracks().length == 0) {
