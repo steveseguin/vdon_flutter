@@ -478,13 +478,7 @@ class Signaling {
         });
       } else {
          stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-			  'mandatory': {
-					'maxWidth': width,
-					'maxHeight': width,
-					'frameRate': framerate
-				},
-			  },			
+          'video': true,			
 		   'audio': true
         });
       }

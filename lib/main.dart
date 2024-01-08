@@ -30,16 +30,17 @@ Future<bool> isIosVersionSupported() async {
 }
 
 
-void main() {
-  if (WebRTC.platformIsDesktop) {
-    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
-  } else if (WebRTC.platformIsAndroid) {
-    WidgetsFlutterBinding.ensureInitialized();
-    startForegroundService();
-  }
-  runApp(MyApp());
+void main() async {
+ await WidgetsFlutterBinding.ensureInitialized();
+
+ if (WebRTC.platformIsDesktop) {
+   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+ } 
+
+ runApp(MyApp());
 }
-Future < bool > startForegroundService() async {
+
+Future<bool> startForegroundService() async {
   final androidConfig = FlutterBackgroundAndroidConfig(
     notificationTitle: 'VDO.Ninja background service',
     notificationText: 'VDO.Ninja background service',
@@ -48,8 +49,28 @@ Future < bool > startForegroundService() async {
       name: 'background_icon',
       defType: 'drawable'),
   );
-  await FlutterBackground.initialize(androidConfig: androidConfig);
-  return FlutterBackground.enableBackgroundExecution();
+
+  try {
+	 print("ASKING FOR BACKGROUND PERMISSINOS");
+	 await FlutterBackground.initialize(androidConfig: androidConfig); 
+	 try {
+		  await FlutterBackground.enableBackgroundExecution(); // i need to run this all twice, since if not, it doesn't work.  bug?
+	 } catch (e) {
+	 
+	 }
+	 bool initialized = await FlutterBackground.initialize(androidConfig: androidConfig);
+	 print(initialized);
+	 if (initialized) {
+	   await FlutterBackground.enableBackgroundExecution();
+	   return true;
+	 } else {
+	   print('!!!!!! Error: FlutterBackground not initialized');
+	   return false;
+	 }
+	} catch (e) {
+	 print('!!!! Error initializing FlutterBackground: $e');
+	 return false;
+	}
 }
 class MyApp extends StatefulWidget {
   @override
@@ -237,15 +258,14 @@ class _MyAppState extends State < MyApp > {
     setState(() {
       Wakelock.enable();
     });
-    final androidConfig = FlutterBackgroundAndroidConfig(
-      notificationTitle: "VDO.Ninja",
-      notificationText: "VDO.Ninja is running in the background",
-      notificationImportance: AndroidNotificationImportance.Default,
-      notificationIcon: AndroidResource(
-        name: 'background_icon',
-        defType: 'drawable'),
-    );
-    await FlutterBackground.initialize(androidConfig: androidConfig);
+	
+    if (WebRTC.platformIsAndroid) {
+	   bool serviceStarted = await startForegroundService();
+	   if (!serviceStarted) {
+		 // Handle the failure appropriately
+		 print('Failed to start foreground service');
+	   }
+	 }
   }
   void showDemoDialog < T > ({
     required BuildContext context,
