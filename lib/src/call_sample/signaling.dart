@@ -9,6 +9,9 @@ import 'dart:io' show Platform;
 import 'package:tuple/tuple.dart';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart' as encrypt;
+
+import 'package:convert/convert.dart';
 
 
 enum SignalingState {
@@ -46,46 +49,6 @@ String generateHash(String inputStr, [int? length]) {
 }
 
 
-/* Tuple2<String, IV> encryptMessage(String message,  {String? phrase}) {
-  final phraseToUse = phrase ?? 'someEncryptionKey123vdo.ninja';
-  final iv = IV.fromLength(16);
-
-  final bytes1 = utf8.encode(phraseToUse);         // data being hashed
-  final digest1 = sha256.convert(bytes1);  
-
-  final key = Key.fromUtf8(digest1.toString());
-
-  final encrypter = Encrypter(AES(key, mode: AESMode.cbc));
-
-  final encrypted = encrypter.encrypt(message, iv: iv);
-  final encryptedData = encrypted.base64;
-
-  return  new Tuple2(encryptedData, iv);
-}
-
-Tuple2<String, IV> encryptMessage2(plainText) {
-  final key = Key.fromUtf8('someEncryptionKey123vdo.ninja');
-  final iv = IV.fromLength(16);
-
-  final encrypter = Encrypter(AES(key));
-  final encrypted = encrypter.encrypt(plainText, iv: iv); 
-
-  print(encrypted.base64);
-
-  return new Tuple2(encrypted.base64, iv);
-}
-
-String decryptMessage2(encrypted, iv) {
-  final key = Key.fromUtf8('someEncryptionKey123vdo.ninja');
-  final iv = IV.fromLength(16);
-
-  final encrypter = Encrypter(AES(key));
-  final decrypted = encrypter.decrypt(encrypted, iv: iv);
-
-  return decrypted;
-} */
-
-
 /*
  * callbacks for Signaling API.
  */
@@ -107,6 +70,9 @@ class Signaling {
   var UUID = "";
   var TURNLIST = [];
   var audioDeviceId = "default";
+  var salt = "vdo.ninja";
+  var password = "someEncryptionKey123";
+  var usepassword = true;
   
   Signaling (_streamID, _deviceID, _audioDeviceId, _roomID, _quality, _WSSADDRESS, _TURNLIST, _password) {
     // INIT CLASS
@@ -122,13 +88,18 @@ class Signaling {
 	this.WSSADDRESS = _WSSADDRESS;
 	this.TURNLIST = _TURNLIST;
 	
+	
 	if ((_password == "0") || (_password == "false") || (_password == "off")){
 		this.hashcode = "";
+		this.password = "";
+		this.usepassword = false;
 	} else if (_password!=""){
-		this.hashcode = generateHash(_password+"vdo.ninja", 6);
+		this.hashcode = generateHash(_password+salt, 6);
+		this.password = _password;
 	} else {
 		this.hashcode = "";
 	}
+	
 	print("HASH CODE");
 	print(this.hashcode);
 	
@@ -143,6 +114,43 @@ class Signaling {
 	
   }
   
+	Future<List<String>> encryptMessage(String message, [String? phrase]) async {
+	  phrase ??= password + salt;
+	  
+	  final key = _generateKey(phrase);
+	  final iv = encrypt.IV.fromSecureRandom(16);
+	  final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
+
+	  final encryptedData = encrypter.encryptBytes(utf8.encode(message), iv: iv);
+	  return [hex.encode(encryptedData.bytes), hex.encode(iv.bytes)];
+	}
+
+	Future<String> decryptMessage(String hexEncryptedData, String hexIv, [String? phrase]) async {
+	  phrase ??= password + salt;
+	  final key = _generateKey(phrase);
+	  final iv = encrypt.IV(Uint8List.fromList(hex.decode(hexIv)));
+	  final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
+
+	  final encryptedData = encrypt.Encrypted(Uint8List.fromList(hex.decode(hexEncryptedData)));
+	  final decryptedBytes = encrypter.decryptBytes(encryptedData, iv: iv);
+	  return utf8.decode(decryptedBytes);  // Return the decrypted string
+	}
+	
+	Uint8List convertStringToUint8Array(String str) {
+	  var bytes = Uint8List(str.length);
+	  for (var i = 0; i < str.length; i++) {
+		bytes[i] = str.codeUnitAt(i);
+	  }
+	  return bytes;
+	}
+
+	encrypt.Key _generateKey(String phrase) {
+	  final Uint8List phraseBytes = convertStringToUint8Array(phrase);
+	  final digest = sha256.convert(phraseBytes);
+	  return encrypt.Key(Uint8List.fromList(digest.bytes)); // Convert List<int> to Uint8List
+	}
+  
+ 
   
    Future<void> changeAudioSource(String audioDeviceId) async {
 		  // Get a new stream with the selected audio device
@@ -339,13 +347,27 @@ class Signaling {
 		if (!UUID.isEmpty){
 		  request["from"] = UUID;
 		}
-        _socket.send(_encoder.convert(request));
+		
+		if (usepassword){
+		  String candidateJson = jsonEncode(request["candidate"]);
+		  List<String> encrypted = await encryptMessage(candidateJson);
+		  request["candidate"] = encrypted[0];
+		  request["vector"] = encrypted[1];
+		}
+		
+        _socket.send(jsonEncode(request));
       };
 
       pc.onIceConnectionState = (state) {};
 
       _createOffer(uuid);
     } else if (mapData.containsKey('description')) {
+		
+	  if (usepassword && mapData.containsKey('vector')) {
+		  String decryptedJson = await decryptMessage(mapData['description'], mapData['vector']);
+		  mapData['description'] = jsonDecode(decryptedJson);  // Decode JSON here
+		}
+	  
       if (mapData['description']['type'] == "offer") {
         print("GOOD SO FAR OFFER GOT");
         await _sessions[mapData['UUID']].setRemoteDescription(
@@ -365,6 +387,14 @@ class Signaling {
             mapData['description']['sdp'], mapData['description']['type']));
       }
     } else if (mapData.containsKey('candidate')) {
+		
+	  
+	  
+	  if (usepassword && mapData.containsKey('vector')) {
+		  String decryptedJson = await decryptMessage(mapData['candidate'], mapData['vector']);
+		  mapData['candidate'] = jsonDecode(decryptedJson);  // Decode JSON here
+		}
+	  
       var candidateMap = mapData['candidate'];
       RTCIceCandidate candidate = RTCIceCandidate(candidateMap['candidate'],
           candidateMap['sdpMid'], candidateMap['sdpMLineIndex']);
@@ -373,6 +403,12 @@ class Signaling {
         await _sessions[mapData['UUID']].addCandidate(candidate);
       }
     } else if (mapData.containsKey('candidates')) {
+		
+	  if (usepassword && mapData.containsKey('vector')) {
+		  String decryptedJson = await decryptMessage(mapData['candidates'], mapData['vector']);
+		  mapData['candidates'] = jsonDecode(decryptedJson);  // Decode JSON here
+		}
+	  
       var candidateMap = mapData['candidates'];
       for (var i = 0; i < candidateMap.length; i++) {
         RTCIceCandidate candidate = RTCIceCandidate(
@@ -451,13 +487,17 @@ class Signaling {
 
     String width = "1280";
     String height = "720";
+	String framerate = "30";
+	
     late MediaStream audioStream;
     late MediaStream stream;
+	
     if (quality) {
       width = "1920";
       height = "1080";
+	  String framerate = "60";
     }
-     String framerate = "60";
+     
 
 	print("AUDIO DEVICE");
 	print(audioDeviceId);
@@ -465,22 +505,47 @@ class Signaling {
 
     if (deviceID == "screen") {
       if (Platform.isIOS){
+		width = "1280";
+		height = "720";
         stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-            'deviceId': 'broadcast',
-			'mandatory': {
+			  'video': {
+				'deviceId': 'broadcast',
+				'mandatory': {
+				  'width': width,
+				  'height': height,
+				  'maxWidth': width,
+				  'maxHeight': width,
+				  'frameRate': framerate
+				},
+				'width': width,
+				'height': height,
 				'maxWidth': width,
 				'maxHeight': width,
 				'frameRate': framerate
-			}
-          }, 
-          'audio': true
-        });
+			  },
+			  'audio': true
+			});
       } else {
-         stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': true,			
-		   'audio': true
-        });
+        width = "1280";
+		height = "720";
+        stream = await navigator.mediaDevices.getDisplayMedia({
+			  'video': {
+				'deviceId': 'broadcast',
+				'mandatory': {
+				  'width': width,
+				  'height': height,
+				  'maxWidth': width,
+				  'maxHeight': width,
+				  'frameRate': framerate
+				},
+				'width': width,
+				'height': height,
+				'maxWidth': width,
+				'maxHeight': width,
+				'frameRate': framerate
+			  },
+			  'audio': true
+			});
       }
       if (stream.getAudioTracks().length == 0) {
         audioStream = await navigator.mediaDevices.getUserMedia({
@@ -659,18 +724,26 @@ class Signaling {
   Future<void> _createOffer(String uuid) async {
     print("CREATE OFFER");
     try {
-      RTCSessionDescription s = await _sessions[uuid].createOffer(_dcConstraints);
-      await _sessions[uuid].setLocalDescription(s);
+		RTCSessionDescription s = await _sessions[uuid].createOffer(_dcConstraints);
+		await _sessions[uuid].setLocalDescription(s);
 
-      var request = Map();
-      request["UUID"] = uuid;
-      request["description"] = {'sdp': s.sdp, 'type': s.type};
-      request["session"] = _sessionID[uuid];
-      request["streamID"] = streamID+hashcode;
-	  if (!UUID.isEmpty){
+		var request = Map();
+		request["UUID"] = uuid;
+		request["description"] = {'sdp': s.sdp, 'type': s.type};
+		request["session"] = _sessionID[uuid];
+		request["streamID"] = streamID+hashcode;
+		
+		if (!UUID.isEmpty){
 		  request["from"] = UUID;
 		}
-      _socket.send(_encoder.convert(request));
+
+		if (usepassword){
+		  List<String> encrypted = await encryptMessage(_encoder.convert(request["description"]));
+		  request["description"] = encrypted[0];
+		  request["vector"] = encrypted[1];
+		}
+
+		_socket.send(_encoder.convert(request));
     } catch (e) {
       print(e.toString());
     }
@@ -678,18 +751,25 @@ class Signaling {
 
   Future<void> _createAnswer(String uuid) async {
     try {
-      RTCSessionDescription s = await _sessions[uuid].createAnswer({});
-      await _sessions[uuid].setLocalDescription(s);
+		RTCSessionDescription s = await _sessions[uuid].createAnswer({});
+		await _sessions[uuid].setLocalDescription(s);
 
-      var request = Map();
-      request["UUID"] = uuid;
-      request["description"] = {'sdp': s.sdp, 'type': s.type};
-      request["session"] = _sessionID[uuid];
-      request["streamID"] = streamID+hashcode;
-	  if (!UUID.isEmpty){
+		var request = Map();
+		request["UUID"] = uuid;
+		request["description"] = {'sdp': s.sdp, 'type': s.type};
+		request["session"] = _sessionID[uuid];
+		request["streamID"] = streamID+hashcode;
+		if (!UUID.isEmpty){
 		  request["from"] = UUID;
 		}
-      _socket.send(_encoder.convert(request));
+
+		if (usepassword){
+		  List<String> encrypted = await encryptMessage(_encoder.convert(request["description"]));
+		  request["description"] = encrypted[0];
+		  request["vector"] = encrypted[1];
+		}
+
+		_socket.send(_encoder.convert(request));
     } catch (e) {
       print(e.toString());
     }

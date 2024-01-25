@@ -41,35 +41,34 @@ void main() async {
 }
 
 Future<bool> startForegroundService() async {
-  final androidConfig = FlutterBackgroundAndroidConfig(
-    notificationTitle: 'VDO.Ninja background service',
-    notificationText: 'VDO.Ninja background service',
-    notificationImportance: AndroidNotificationImportance.Default,
-    notificationIcon: AndroidResource(
-      name: 'background_icon',
-      defType: 'drawable'),
-  );
+	final androidConfig = FlutterBackgroundAndroidConfig(
+		notificationTitle: 'VDO.Ninja background service',
+		notificationText: 'VDO.Ninja background service',
+		notificationImportance: AndroidNotificationImportance.Default,
+		notificationIcon: AndroidResource(
+		  name: 'background_icon',
+		  defType: 'drawable'
+		),
+	);
 
-  try {
-	 print("ASKING FOR BACKGROUND PERMISSINOS");
-	 await FlutterBackground.initialize(androidConfig: androidConfig); 
-	 try {
-		  await FlutterBackground.enableBackgroundExecution(); // i need to run this all twice, since if not, it doesn't work.  bug?
-	 } catch (e) {
-	 
-	 }
-	 bool initialized = await FlutterBackground.initialize(androidConfig: androidConfig);
-	 print(initialized);
-	 if (initialized) {
-	   await FlutterBackground.enableBackgroundExecution();
-	   return true;
-	 } else {
-	   print('!!!!!! Error: FlutterBackground not initialized');
-	   return false;
-	 }
+	try {
+		await FlutterBackground.initialize(androidConfig: androidConfig); 
+		try {
+			await FlutterBackground.enableBackgroundExecution();
+		} catch (e) {
+		}
+
+		bool initialized = await FlutterBackground.initialize(androidConfig: androidConfig);
+		if (initialized) {
+			await FlutterBackground.enableBackgroundExecution();
+			return true;
+		} else {
+			print('Error: FlutterBackground not initialized');
+			return false;
+		}
 	} catch (e) {
-	 print('!!!! Error initializing FlutterBackground: $e');
-	 return false;
+		print('Error initializing FlutterBackground: $e');
+		return false;
 	}
 }
 class MyApp extends StatefulWidget {
