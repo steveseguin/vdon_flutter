@@ -63,6 +63,7 @@ class Signaling {
   var streamID = "";
   var deviceID = "screen";
   var hashcode = "";
+  var roomhashcode = "";
   var roomID = "";
   var quality = false;
   var active = false;
@@ -92,12 +93,17 @@ class Signaling {
 	if ((_password == "0") || (_password == "false") || (_password == "off")){
 		this.hashcode = "";
 		this.password = "";
+		this.roomhashcode = "";
 		this.usepassword = false;
 	} else if (_password!=""){
 		this.hashcode = generateHash(_password+salt, 6);
 		this.password = _password;
+		if (_roomID!=""){
+			this.roomhashcode = generateHash(_roomID+_password+salt, 16);
+		}
 	} else {
 		this.hashcode = "";
+		this.roomhashcode = "";
 	}
 	
 	print("HASH CODE");
@@ -308,7 +314,6 @@ class Signaling {
 		'iceServers': this.TURNLIST
 	  };
 
-	  print("**************** configuration TO BE USED");
 	  print(configuration);
 
       RTCPeerConnection pc = await createPeerConnection(configuration, _config);
@@ -427,7 +432,7 @@ class Signaling {
     _localStream = await createStream(true, deviceID, audioDeviceId);
     active=true;
 
-	if (UUID.isEmpty && WSSADDRESS != "wss://wss.vdo.ninja:443") {
+	if (UUID.isEmpty && (WSSADDRESS != "wss://wss.vdo.ninja:443")) {
 	  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
 	  Random _rnd = Random();
 	  String getRandomString(int length) =>
@@ -457,11 +462,17 @@ class Signaling {
       if (roomID != "") {
         var request = Map();
         request["request"] = "joinroom";
-        request["roomid"] = roomID;
+		// return generateHash(roomid+session.password+session.salt+token,16).then(function(rid){
+		if (roomhashcode!=""){
+			request["roomid"] = roomhashcode;
+		} else {
+			request["roomid"] = roomID; 
+		}
 		
 		if (!UUID.isEmpty){
 		  request["from"] = UUID;
 		}
+		print(request);
         _socket.send(_encoder.convert(request));
       }
     };
@@ -565,7 +576,6 @@ class Signaling {
         });
       }
     } else if (deviceID == "front" ||  deviceID.contains("1") || deviceID == "user") {
-		print("SSSSSSSSSSSSSSSSSSSSSSSSSSSS");
 		if (quality){
 			stream = await navigator.mediaDevices.getUserMedia({
 			'audio': {
@@ -616,7 +626,6 @@ class Signaling {
         });
 		
     } else if (deviceID == "rear" ||  deviceID == "environment" || deviceID.contains("0")) {
-		print("00000000000000");
 		if (quality){
 		  stream = await navigator.mediaDevices.getUserMedia({
 			'audio': {
