@@ -158,11 +158,11 @@ class Signaling {
   
  
   
-   Future<void> changeAudioSource(String audioDeviceId) async {
+   Future<void> changeAudioSource(String audioDeviceId) async { 
 		  // Get a new stream with the selected audio device
 		  final newLocalStream = await navigator.mediaDevices.getUserMedia({
 			'audio': {
-			  'deviceId': audioDeviceId,
+			  'optional':{'sourceId': audioDeviceId},
 			},
 			'video': false,
 		  });
@@ -281,8 +281,9 @@ class Signaling {
   }
 
   void muteMic() {
-      bool enabled = _localStream.getAudioTracks()[0].enabled;
-      _localStream.getAudioTracks()[0].enabled = !enabled;
+    bool enabled = _localStream.getAudioTracks()[0].enabled;
+    _localStream.getAudioTracks()[0].enabled = !enabled;
+	print(_localStream.getAudioTracks()[0].label);
   }
 
   void invite(peerId, video, useScreen) {}
@@ -518,7 +519,8 @@ class Signaling {
       if (Platform.isIOS){
 		width = "1280";
 		height = "720";
-        stream = await navigator.mediaDevices.getDisplayMedia({
+		if (audioDeviceId=="default"){
+			stream = await navigator.mediaDevices.getDisplayMedia({
 			  'video': {
 				'deviceId': 'broadcast',
 				'mandatory': {
@@ -536,7 +538,27 @@ class Signaling {
 			  },
 			  'audio': true
 			});
-      } else {
+		} else {
+			stream = await navigator.mediaDevices.getDisplayMedia({
+			  'video': {
+				'deviceId': 'broadcast',
+				'mandatory': {
+				  'width': width,
+				  'height': height,
+				  'maxWidth': width,
+				  'maxHeight': width,
+				  'frameRate': framerate
+				},
+				'width': width,
+				'height': height,
+				'maxWidth': width,
+				'maxHeight': width,
+				'frameRate': framerate
+			  },
+			  'audio': {'optional':{'sourceId': audioDeviceId},}
+			});
+		}
+      } else if (audioDeviceId=="default"){
         width = "1280";
 		height = "720";
         stream = await navigator.mediaDevices.getDisplayMedia({
@@ -557,19 +579,53 @@ class Signaling {
 			  },
 			  'audio': true
 			});
-      }
+      } else {
+		width = "1280";
+		height = "720";
+        stream = await navigator.mediaDevices.getDisplayMedia({
+			  'video': {
+				'deviceId': 'broadcast',
+				'mandatory': {
+				  'width': width,
+				  'height': height,
+				  'maxWidth': width,
+				  'maxHeight': width,
+				  'frameRate': framerate
+				},
+				'width': width,
+				'height': height,
+				'maxWidth': width,
+				'maxHeight': width,
+				'frameRate': framerate
+			  },
+			  'audio':  {'optional':{'sourceId': audioDeviceId},}
+			});
+	  }
       if (stream.getAudioTracks().length == 0) {
-        audioStream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-			//'deviceId': audioDeviceId,
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false,
-              'noiseSuppression': false,
-              'autoGainControl': false
-            }
-          }
-        });
+		  if (audioDeviceId=="default"){
+				audioStream = await navigator.mediaDevices.getUserMedia({
+				  'audio': {
+					'mandatory': {
+					  'googEchoCancellation': false,
+					  'echoCancellation': false,
+					  'noiseSuppression': false,
+					  'autoGainControl': false
+					}
+				  }
+				});
+		  } else {
+			  audioStream = await navigator.mediaDevices.getUserMedia({
+				  'audio': {
+					'optional':{'sourceId': audioDeviceId},
+					'mandatory': {
+					  'googEchoCancellation': false,
+					  'echoCancellation': false,
+					  'noiseSuppression': false,
+					  'autoGainControl': false
+					}
+				  }
+				});
+		  }
 		
         audioStream.getAudioTracks().forEach((element) async {
           await stream.addTrack(element);
@@ -577,26 +633,10 @@ class Signaling {
       }
     } else if (deviceID == "front" ||  deviceID.contains("1") || deviceID == "user") {
 		if (quality){
-			stream = await navigator.mediaDevices.getUserMedia({
-			'audio': {
-			  //'deviceId': audioDeviceId,
-			  'mandatory': {
-				'googEchoCancellation': false,
-				'echoCancellation': false
-			  }
-			},
-			'video': {
-			  'facingMode': 'user',
-			  'mandatory': {
-				'minWidth': width,
-				'minHeight': height,
-			  }
-			}
-		  });
-		} else{
-			stream = await navigator.mediaDevices.getUserMedia({
+			
+			 if (audioDeviceId=="default"){
+				stream = await navigator.mediaDevices.getUserMedia({
 				'audio': {
-				 // 'deviceId': audioDeviceId,
 				  'mandatory': {
 					'googEchoCancellation': false,
 					'echoCancellation': false
@@ -607,46 +647,156 @@ class Signaling {
 				  'mandatory': {
 					'minWidth': width,
 					'minHeight': height,
-					'frameRate': framerate
 				  }
 				}
-			});
+			  });
+			 } else {
+				 stream = await navigator.mediaDevices.getUserMedia({
+					'audio': {
+					  'optional':{'sourceId': audioDeviceId},
+					  'mandatory': {
+						'googEchoCancellation': false,
+						'echoCancellation': false
+					  }
+					},
+					'video': {
+					  'facingMode': 'user',
+					  'mandatory': {
+						'minWidth': width,
+						'minHeight': height,
+					  }
+					}
+				  });
+			 }
+		} else{
+			if (audioDeviceId=="default"){
+				stream = await navigator.mediaDevices.getUserMedia({
+					'audio': {
+					  'mandatory': {
+						'googEchoCancellation': false,
+						'echoCancellation': false
+					  }
+					},
+					'video': {
+					  'facingMode': 'user',
+					  'mandatory': {
+						'minWidth': width,
+						'minHeight': height,
+						'frameRate': framerate
+					  }
+					}
+				});
+			} else {
+				stream = await navigator.mediaDevices.getUserMedia({
+					'audio': {
+					  'optional':{'sourceId': audioDeviceId},
+					  'mandatory': {
+						'googEchoCancellation': false,
+						'echoCancellation': false
+					  }
+					},
+					'video': {
+					  'facingMode': 'user',
+					  'mandatory': {
+						'minWidth': width,
+						'minHeight': height,
+						'frameRate': framerate
+					  }
+					}
+				});
+				print({
+					'audio': {
+					  'optional':{'sourceId': audioDeviceId},
+					  'mandatory': {
+						'googEchoCancellation': false,
+						'echoCancellation': false
+					  }
+					},
+					'video': {
+					  'facingMode': 'user',
+					  'mandatory': {
+						'minWidth': width,
+						'minHeight': height,
+						'frameRate': framerate
+					  }
+					}
+				});
+			}
 		}
 	
-	 } else if (deviceID == "microphone") {
-       stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-		 // 'deviceId': audioDeviceId,
-          'mandatory': {
-            'googEchoCancellation': false,
-            'echoCancellation': false
-          }
-        },
-        'video': false
-        });
-		
-    } else if (deviceID == "rear" ||  deviceID == "environment" || deviceID.contains("0")) {
-		if (quality){
-		  stream = await navigator.mediaDevices.getUserMedia({
+	} else if (deviceID == "microphone") {
+		 if (audioDeviceId=="default"){
+		   stream = await navigator.mediaDevices.getUserMedia({
 			'audio': {
-			//  'deviceId': audioDeviceId,
 			  'mandatory': {
 				'googEchoCancellation': false,
 				'echoCancellation': false
 			  }
 			},
-			'video': {
-			  'facingMode': 'environment',
-			  'mandatory': {
-				'minWidth': width,
-				'minHeight': height,
-			  }
-			}
-		  });
-		} else {
+			'video': false
+			});
+		 } else {
+			  stream = await navigator.mediaDevices.getUserMedia({
+				 'audio': {
+					  // 'deviceId': audioDeviceId,
+					  'mandatory': {},
+					  'optional': [
+						{'sourceId': audioDeviceId.toString()}
+					  ],
+				  },
+				'video': false
+				});
+				print("MIC ONLY");
+				print({
+				 'audio': {
+					  // 'deviceId': audioDeviceId,
+					  'optional': [
+						{'sourceId': audioDeviceId.toString()}
+					  ],
+				  },
+				'video': false
+				});
+		 }
+		
+    } else if (deviceID == "rear" ||  deviceID == "environment" || deviceID.contains("0")) {
+		if (quality){
+			 if (audioDeviceId=="default"){
+			  stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				  'mandatory': {
+					'googEchoCancellation': false,
+					'echoCancellation': false
+				  }
+				},
+				'video': {
+				  'facingMode': 'environment',
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+				  }
+				}
+			  });
+			 } else {
+				 stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				  'optional':{'sourceId': audioDeviceId},
+				  'mandatory': {
+					'googEchoCancellation': false,
+					'echoCancellation': false
+				  }
+				},
+				'video': {
+				  'facingMode': 'environment',
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+				  }
+				}
+			  });
+			 }
+		} else if (audioDeviceId=="default"){
 			stream = await navigator.mediaDevices.getUserMedia({
 			'audio': {
-			//  'deviceId': audioDeviceId,
 			  'mandatory': {
 				'googEchoCancellation': false,
 				'echoCancellation': false
@@ -662,28 +812,106 @@ class Signaling {
 			}
 		  });
 
+		} else {
+			stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				  'optional':{'sourceId': audioDeviceId},
+				  'mandatory': {
+					'googEchoCancellation': false,
+					'echoCancellation': false
+				  }
+				},
+				'video': {
+				  'facingMode': 'environment',
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+					'frameRate': framerate
+				  }
+				}
+			  });
+			  print({
+				'audio': {
+				  'optional':{'sourceId': audioDeviceId},
+				  'mandatory': {
+					'googEchoCancellation': false,
+					'echoCancellation': false
+				  }
+				},
+				'video': {
+				  'facingMode': 'environment',
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+					'frameRate': framerate
+				  }
+				}
+			  });
 		}
 		
     } else {
       //var devices =  await navigator.mediaDevices.enumerateDevices();
       if (quality){
-		  stream = await navigator.mediaDevices.getUserMedia({
-			'audio': {
-			//  'deviceId': audioDeviceId,
-			  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
-			},
-			'video': {
-			  'deviceId': deviceID,
-			  'mandatory': {
-				'minWidth': width,
-				'minHeight': height,
-			  }
-			}
-		  });
+		   if (audioDeviceId=="default"){
+			  stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+				},
+				'video': {
+				  'deviceId': deviceID,
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+				  }
+				}
+			  });
+		   } else {
+			   stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+					'optional':{'sourceId': audioDeviceId},
+					'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+				},
+				'video': {
+				  'deviceId': deviceID,
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+				  }
+				}
+			  });
+		   }
+		} else if (audioDeviceId=="default"){
+			stream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+				},
+				'video': {
+				  'deviceId': deviceID,
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+					'frameRate': framerate
+				  }
+				}
+			  });
 		} else {
 			stream = await navigator.mediaDevices.getUserMedia({
 				'audio': {
-			//	  'deviceId': audioDeviceId,
+				  'optional':{'sourceId': audioDeviceId},
+				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+				},
+				'video': {
+				  'deviceId': deviceID,
+				  'mandatory': {
+					'minWidth': width,
+					'minHeight': height,
+					'frameRate': framerate
+				  }
+				}
+			  });
+			 print({
+				'audio': {
+				  'optional':{'sourceId': audioDeviceId},
 				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
 				},
 				'video': {
@@ -697,7 +925,10 @@ class Signaling {
 			  });
 		}
     }
-	
+	print("Quality..");
+	print(quality);
+	print("deviceID...");
+	print(deviceID);
 	//var videoTrack = stream!.getVideoTracks().firstWhere((track) => track.kind == 'video');
 	//if (videoTrack){
 	//	WebRTC.invokeMethod('mediaStreamTrackSetZoom',<String, dynamic>{'trackId': videoTrack.id, 'zoomLevel': 1.0});

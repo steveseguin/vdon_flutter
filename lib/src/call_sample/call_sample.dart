@@ -58,11 +58,6 @@ class _CallSampleState extends State<CallSample> {
   bool mirrored = true;
   double totalZoomLevel = 1.0;
   
- // String _selectedMicrophoneId = '';
-  
-  //List<MediaDeviceInfo> _microphones = [];
-
-  // ignore: unused_element
   _CallSampleState();
 
   @override
@@ -70,22 +65,8 @@ class _CallSampleState extends State<CallSample> {
     super.initState();
     initRenderers();
     _connect();
-    //_enumerateMicrophones(); // New method to enumerate microphones
   }
   
- /*  _enumerateMicrophones() async {
-    final devices = await navigator.mediaDevices.enumerateDevices();
-    setState(() {
-      _microphones = devices.where((d) => d.kind == 'audioinput').toList();
-	  print("MICROPHONE LIST");
-	  print(_microphones);
-      if (_microphones.isNotEmpty) {
-		_selectedMicrophoneId = _microphones.first.deviceId;
-		print(_microphones.first.deviceId);
-		print(_microphones.first.label);
-      }
-    });
-  } */
 
   initRenderers() async {
     await _localRenderer.initialize();
@@ -515,26 +496,59 @@ class _CallSampleState extends State<CallSample> {
       );
     }
 
-    return Scaffold(
-      key: key,
-      appBar: AppBar(
-        title: Text('Sharing'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.info),
-            onPressed: () => _info(),
-          )
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [  
-            Expanded(
-              child: Stack(alignment: Alignment.bottomCenter, children: [
-                widget.deviceID != 'screen'
-                    ? widget.deviceID != 'microphone'
-						? GestureDetector(
+   return Scaffold(
+	  key: key,
+	  extendBodyBehindAppBar: true,
+	  appBar: AppBar(
+		backgroundColor: Colors.transparent,
+		elevation: 0,
+		leading: IconButton(
+		  icon: Icon(Icons.arrow_back),
+		  color: Colors.white,
+		  onPressed: () => Navigator.of(context).pop(),
+		),
+		title: Stack(
+		  children: [
+			// Black outline
+			Text(
+			  'Sharing',
+			  style: TextStyle(
+				fontSize: 20,
+				foreground: Paint()
+				  ..style = PaintingStyle.stroke
+				  ..strokeWidth = 6
+				  ..color = Colors.black,
+			  ),
+			),
+			// White text
+			Text(
+			  'Sharing',
+			  style: TextStyle(
+				fontSize: 20,
+				color: Colors.white,
+			  ),
+			),
+		  ],
+		),
+		actions: [
+		  IconButton(
+			icon: Icon(Icons.info),
+			onPressed: () => _info(),
+			color: Colors.white,
+		  ),
+		],
+	  ),
+	  body: Center(
+		child: Column(
+		  mainAxisAlignment: MainAxisAlignment.start,
+		  children: [
+			Expanded(
+			  child: Stack(
+				alignment: Alignment.bottomCenter,
+				children: [
+				  widget.deviceID != 'screen'
+					  ? widget.deviceID != 'microphone'
+						  ? GestureDetector(
 							  onVerticalDragUpdate: (details) {
 								double delta = details.primaryDelta ?? 0.0;
 								if (delta > 0) {
@@ -551,77 +565,77 @@ class _CallSampleState extends State<CallSample> {
 								mirror: widget.deviceID == "rear" || widget.deviceID == "environment" || widget.deviceID.contains("0") ? !mirrored : mirrored
 							  ),
 							)
-						: Container(
-							color: Theme.of(context).canvasColor,
-							child: Column(
-							  mainAxisAlignment: MainAxisAlignment.center,
-							  crossAxisAlignment: CrossAxisAlignment.center,
-							  children: [
-								Padding(
-								  padding: const EdgeInsets.all(20.0),
-								  child: Text(
-									"Open the view link in a browser.  If it doesn't auto-play, click the page.",
-									textAlign: TextAlign.center,
-									style: TextStyle(
-										color: Colors.white, fontSize: 20),
+						  : Container(
+							  color: Theme.of(context).canvasColor,
+							  child: Column(
+								mainAxisAlignment: MainAxisAlignment.center,
+								crossAxisAlignment: CrossAxisAlignment.center,
+								children: [
+								  Padding(
+									padding: const EdgeInsets.all(20.0),
+									child: Text(
+									  "Open the view link in a browser.  If it doesn't auto-play, click the page.",
+									  textAlign: TextAlign.center,
+									  style: TextStyle(
+										  color: Colors.white, fontSize: 20),
+									),
 								  ),
+								],
+							  ),
+							)
+					  : Container(
+						  color: Theme.of(context).canvasColor,
+						  child: Column(
+							mainAxisAlignment: MainAxisAlignment.center,
+							crossAxisAlignment: CrossAxisAlignment.center,
+							children: [
+							  Padding(
+								padding: const EdgeInsets.all(20.0),
+								child: Text(
+								  "Open the view link to see the screen's output. Permission to share the screen must be granted.",
+								  textAlign: TextAlign.center,
+								  style: TextStyle(
+									  color: Colors.white, fontSize: 20),
 								),
-							  ],
+							  ),
+							],
+						  ),
+						),
+				  Positioned(
+					top: 0,
+					left: 0,
+					right: 0,
+					child: Container(
+					  padding: EdgeInsets.symmetric(vertical: 10),
+					  color: Colors.black.withAlpha(100),
+					  child: Row(
+						mainAxisAlignment: MainAxisAlignment.spaceAround,
+						children: [
+						  Icon(
+							Icons.video_call,
+							size: 40,
+							color: Colors.white,
+						  ),
+						  GestureDetector(
+							onTap: () => Share.share(vdonLink),
+							child: Text(
+							  "Open in OBS Browser Source: \n" + vdonLink,
+							  style: TextStyle(color: Colors.white),
+							  textAlign: TextAlign.left,
 							),
-						  )
-                    : Container(
-                        color: Theme.of(context).canvasColor,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(20.0),
-                              child: Text(
-                                "Open the view link to see the screen's output. Permission to share the screen must be granted.",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: Colors.white, fontSize: 20),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    color: Colors.black.withAlpha(100),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Icon(
-                          Icons.video_call,
-                          size: 40,
-                          color: Colors.white,
-                        ),
-                        GestureDetector(
-                          onTap: () => Share.share(vdonLink),
-                          child: Text(
-                            "Open in OBS Browser Source: \n" + vdonLink,
-                            style: TextStyle(color: Colors.white),
-                            textAlign: TextAlign.left,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-				
-                callControls(),
-              ]),
-            ),
-          ],
-        ),
-      ),
-      backgroundColor: const Color(0x000000ff),
-    );
+						  ),
+						],
+					  ),
+					),
+				  ),
+				  callControls(),
+				],
+			  ),
+			),
+		  ],
+		),
+	  ),
+	  backgroundColor: const Color(0x000000ff),
+	);
   }
 }

@@ -29,13 +29,13 @@ if (keystorePropertiesFile.exists()) {
 
 
 android {
-    compileSdkVersion 33
+    compileSdkVersion 34
 
 
     defaultConfig {
         applicationId "flutter.vdo.ninja"
         minSdkVersion 21 
-        targetSdkVersion 33
+        targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutteVersionName
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"

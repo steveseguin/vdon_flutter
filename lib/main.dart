@@ -83,20 +83,9 @@ bool advanced = false;
 bool landscape = false;
 String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
-String _selectedMicrophoneId = '';
-List<MediaDeviceInfo> _microphones = [];
 
-_enumerateMicrophones() async {
-    final devices = await navigator.mediaDevices.enumerateDevices();
-	  _microphones = devices.where((d) => d.kind == 'audioinput').toList();
-	  print("MICROPHONE LIST");
-	  print(_microphones);
-	  if (_microphones.isNotEmpty) {
-		_selectedMicrophoneId = _microphones.first.deviceId;
-		print(_microphones.first.deviceId);
-		print(_microphones.first.label);
-	  }
-  }
+String _selectedMicrophoneId = 'default';
+List<MediaDeviceInfo> _microphones = [];
 
 enum DialogDemoAction {
   cancel,
@@ -131,7 +120,6 @@ class _MyAppState extends State < MyApp > {
   @override
   initState() {
     super.initState();
-	_enumerateMicrophones();
     _initData();
     _initItems();
   }
@@ -225,7 +213,7 @@ class _MyAppState extends State < MyApp > {
 	
     WSSADDRESS = _prefs.getString('WSSADDRESS') ?? WSSADDRESS;
     TURNSERVER = _prefs.getString('TURNSERVER') ?? TURNSERVER;
-	_selectedMicrophoneId = _prefs.getString('audioDeviceId') ?? _selectedMicrophoneId;
+	// _selectedMicrophoneId = _prefs.getString('audioDeviceId') ?? _selectedMicrophoneId;
 	
     try {
       quality = _prefs.getBool('resolution') ?? false;
@@ -359,8 +347,32 @@ class _MyAppState extends State < MyApp > {
                       textAlign: TextAlign.center,
                     ),
                 ),
+				Padding(
+				  padding: const EdgeInsets.fromLTRB(0, 190, 0, 0),
+				  child: DropdownButton<String>(
+					value: _selectedMicrophoneId,
+					onChanged: (String? newValue) {
+					  if (newValue != null) {
+						_prefs.setString('audioDeviceId', newValue);
+						setState(() {
+						  _selectedMicrophoneId = newValue;
+						  Navigator.pop(context);
+						  _showAddressDialog(context);
+						});
+					  }
+					},
+					dropdownColor: Colors.grey[200], // Set the dropdown background color here
+					items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
+					  return DropdownMenuItem<String>(
+						value: device.deviceId,
+						child: Text(device.label),
+					  );
+					}).toList(),
+				  ),
+				),
+
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 180, 0, 0),
+                  padding: const EdgeInsets.fromLTRB(0, 240, 0, 0),
                     child: SwitchListTile(
                       title: const Text('Prefer 1080p'),
                         value: quality,
@@ -374,7 +386,7 @@ class _MyAppState extends State < MyApp > {
                         }),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 220, 0, 0),
+                  padding: const EdgeInsets.fromLTRB(0, 280, 0, 0),
                     child: SwitchListTile(
                       title: const Text('Force landscape'),
                         value: landscape,
@@ -388,31 +400,9 @@ class _MyAppState extends State < MyApp > {
                         }
 					),
                 ),
-				/* Padding(
-				  padding: const EdgeInsets.fromLTRB(0, 260, 0, 0),
-				  child: DropdownButton<String>(
-					value: _selectedMicrophoneId,
-					onChanged: (String? newValue) {
-					  if (newValue != null) {
-						_prefs.setString('audioDeviceId', newValue);
-						setState(() {
-						  _selectedMicrophoneId = newValue;
-						  Navigator.pop(context);
-						  _showAddressDialog(context);
-						});
-					  }
-					},
-					items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
-					  return DropdownMenuItem<String>(
-						value: device.deviceId,
-						child: Text(device.label),
-					  );
-					}).toList(),
-				  ),
-				), */
                 if (!advanced)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 260, 0, 0),
+                    padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
                       child: SwitchListTile(
                         title: const Text('Advanced'),
                           value: advanced,
@@ -427,7 +417,7 @@ class _MyAppState extends State < MyApp > {
                   ),
                   if (advanced)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 260, 0, 0),
+                      padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
                         child: TextField(
                           onChanged: (String text) {
                             setState(() {
@@ -444,7 +434,7 @@ class _MyAppState extends State < MyApp > {
                     ),
                     if (advanced)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 315, 0, 0),
+                        padding: const EdgeInsets.fromLTRB(0, 375, 0, 0),
                           child: TextField(
                             onChanged: (String text) {
                               setState(() {
@@ -511,10 +501,20 @@ class _MyAppState extends State < MyApp > {
 			_showAddressDialog(context);
 		  }));
 	}
-	  
+	
     var devices = await navigator.mediaDevices.enumerateDevices();
+	print(devices);
+
 	
     for (var item in devices) {
+      if (item.kind == "audioinput"){
+		_microphones.insert(0, MediaDeviceInfo(deviceId: item.deviceId, label: item.label));
+		print(item.deviceId);
+		print(item.label);
+		print(item);
+		print("------------");
+		continue;		
+	  } 
       if (item.kind != "videoinput") {
         continue;
       }
@@ -544,6 +544,9 @@ class _MyAppState extends State < MyApp > {
           _showAddressDialog(context);
         }));
     }
+	
+	_microphones.insert(0, MediaDeviceInfo(deviceId: 'default', label: 'Default Microphone'));
+	
     items.add(RouteItem(
       title: 'MICROPHONE',
       subtitle: 'Share microphone audio only',
@@ -583,6 +586,7 @@ class _MyAppState extends State < MyApp > {
     }
   }
 }
+
 final PlatformWebViewControllerCreationParams params =
   const PlatformWebViewControllerCreationParams();
 class WebViewScreen extends StatefulWidget {
