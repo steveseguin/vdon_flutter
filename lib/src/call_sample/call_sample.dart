@@ -516,35 +516,36 @@ class _CallSampleState extends State<CallSample> {
     }
 
 	return Scaffold(
-      key: key,
-      extendBodyBehindAppBar: true,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(65.0),
-        child: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leadingWidth: 120,
-          leading: Padding(
-            padding: const EdgeInsets.only(left: 8.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back),
-                  color: Colors.white,
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                SizedBox(width: 2),
-                IconButton(
-                  icon: Icon(Icons.info),
-                  color: Colors.white,
-                  onPressed: () => _info(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+	  key: key,
+	  extendBodyBehindAppBar: true,
+	  appBar: PreferredSize(
+		preferredSize: Size.fromHeight(30.0), // Adjust the height as needed
+		child: SafeArea(
+		  child: AppBar(
+			backgroundColor: Colors.transparent,
+			elevation: 0,
+			leadingWidth: 120, // Adjust the width to fit both buttons and spacing
+			leading: Padding(
+			  padding: const EdgeInsets.only(left: 3.0), // Adjust left padding if necessary
+			  child: Row(
+				children: [
+				  IconButton(
+					icon: Icon(Icons.arrow_back),
+					color: Colors.white,
+					onPressed: () => Navigator.of(context).pop(),
+				  ),
+				  SizedBox(width: 2), // Add spacing between the buttons
+				  IconButton(
+					icon: Icon(Icons.info),
+					color: Colors.white,
+					onPressed: () => _info(),
+			      ),
+				],
+			  ),
+			),
+		  ),
+		),
+	  ),
 	  body: Center(
 		child: Column(
 		  mainAxisAlignment: MainAxisAlignment.start,
@@ -609,30 +610,32 @@ class _CallSampleState extends State<CallSample> {
 						  ),
 						),
 				  Positioned(
-                    top: 65,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      color: Colors.black.withAlpha(100),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          Flexible(
-                            child: GestureDetector(
-                              onTap: () => Share.share(vdonLink),
-                              child: Text(
-                                "Open URL in OBS Browser Source:\n$vdonLink",
-                                style: TextStyle(color: Colors.white),
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  callControls(),
+						top: 55,
+						left: 0,
+						right: 0,
+						child: Container(
+						  padding: EdgeInsets.symmetric(vertical: 10),
+						  color: Colors.black.withAlpha(100),
+						  child: Row(
+							mainAxisAlignment: MainAxisAlignment.end,
+							children: [
+							  Flexible(
+								child: GestureDetector(
+								  onTap: () => {
+									Share.share(vdonLink)
+								  },
+								  child: Text(
+									"Open URL in OBS Browser Source:\n$vdonLink",
+									style: TextStyle(color: Colors.white),
+									textAlign: TextAlign.right,
+								  ),
+								),
+							  ),
+							],
+						  ),
+						),
+					  ),
+					  callControls(),
 				],
 			  ),
 			),
