@@ -602,32 +602,32 @@ class _CallSampleState extends State<CallSample> {
 						  ),
 						),
 				  Positioned(
-					  top: 65,
-					  left: 0,
-					  right: 0,
-					  child: Container(
-						padding: EdgeInsets.symmetric(vertical: 10),
-						color: Colors.black.withAlpha(100),
-						child: Row(
-						  mainAxisAlignment: MainAxisAlignment.spaceAround,
-						  children: [
-							Flexible(
-							  child: GestureDetector(
-								onTap: () => {
-								Share.share(vdonLink)
-								},
-								child: Text(
-								  "Open URL in OBS Browser Source:\n$vdonLink",
-								  style: TextStyle(color: Colors.white),
-								  textAlign: TextAlign.right,
+						top: 65,
+						left: 0,
+						right: 0,
+						child: Container(
+						  padding: EdgeInsets.symmetric(vertical: 10),
+						  color: Colors.black.withAlpha(100),
+						  child: Row(
+							mainAxisAlignment: MainAxisAlignment.end,
+							children: [
+							  Flexible(
+								child: GestureDetector(
+								  onTap: () => {
+									Share.share(vdonLink)
+								  },
+								  child: Text(
+									"Open URL in OBS Browser Source:\n$vdonLink",
+									style: TextStyle(color: Colors.white),
+									textAlign: TextAlign.right,
+								  ),
 								),
 							  ),
-							),
-						  ],
+							],
+						  ),
 						),
 					  ),
-					),
-					callControls(),
+					  callControls(),
 				],
 			  ),
 			),
