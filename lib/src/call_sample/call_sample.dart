@@ -315,18 +315,37 @@ class _CallSampleState extends State<CallSample> {
     });
   }
 
-  _info() {
-    showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            content: Text(
-              "&bitrate and &codec can be used on the viewer side.",
-            ),
-          );
-        });
-  }
-
+	_info() {
+	  showDialog(
+		context: context,
+		builder: (BuildContext context) {
+		  return Dialog(
+			backgroundColor: Colors.transparent,
+			child: Stack(
+			  children: <Widget>[
+				Positioned(
+				  top: 50,
+				  left: 20,
+				  right: 20,
+				  child: Material(
+					color: Colors.white,
+					borderRadius: BorderRadius.circular(8),
+					child: Padding(
+					  padding: const EdgeInsets.all(20.0),
+					  child: Text(
+						"&bitrate=6000 and &codec=av1 can be added to the viewer side's URL to increase quality.\n\nMore such options are listed at:\nhttps://docs.vdo.ninja",
+						style: TextStyle(color: Colors.black),
+					  ),
+					),
+				  ),
+				),
+			  ],
+			),
+		  );
+		},
+	  );
+	}
+	
   @override
   Widget build(BuildContext context) {
 
@@ -496,47 +515,28 @@ class _CallSampleState extends State<CallSample> {
       );
     }
 
-   return Scaffold(
+	return Scaffold(
 	  key: key,
 	  extendBodyBehindAppBar: true,
 	  appBar: AppBar(
 		backgroundColor: Colors.transparent,
 		elevation: 0,
-		leading: IconButton(
-		  icon: Icon(Icons.arrow_back),
-		  color: Colors.white,
-		  onPressed: () => Navigator.of(context).pop(),
-		),
-		title: Stack(
+		leadingWidth: 100, // Set the width to fit both buttons
+		leading: Row(
 		  children: [
-			// Black outline
-			Text(
-			  'Sharing',
-			  style: TextStyle(
-				fontSize: 20,
-				foreground: Paint()
-				  ..style = PaintingStyle.stroke
-				  ..strokeWidth = 6
-				  ..color = Colors.black,
-			  ),
+			IconButton(
+			  icon: Icon(Icons.arrow_back),
+			  color: Colors.white,
+			  onPressed: () => Navigator.of(context).pop(),
 			),
-			// White text
-			Text(
-			  'Sharing',
-			  style: TextStyle(
-				fontSize: 20,
-				color: Colors.white,
-			  ),
+			SizedBox(width: 3),
+			IconButton(
+			  icon: Icon(Icons.info),
+			  color: Colors.white,
+			  onPressed: () => _info(),
 			),
 		  ],
 		),
-		actions: [
-		  IconButton(
-			icon: Icon(Icons.info),
-			onPressed: () => _info(),
-			color: Colors.white,
-		  ),
-		],
 	  ),
 	  body: Center(
 		child: Column(
@@ -602,33 +602,32 @@ class _CallSampleState extends State<CallSample> {
 						  ),
 						),
 				  Positioned(
-					top: 0,
-					left: 0,
-					right: 0,
-					child: Container(
-					  padding: EdgeInsets.symmetric(vertical: 10),
-					  color: Colors.black.withAlpha(100),
-					  child: Row(
-						mainAxisAlignment: MainAxisAlignment.spaceAround,
-						children: [
-						  Icon(
-							Icons.video_call,
-							size: 40,
-							color: Colors.white,
-						  ),
-						  GestureDetector(
-							onTap: () => Share.share(vdonLink),
-							child: Text(
-							  "Open in OBS Browser Source: \n" + vdonLink,
-							  style: TextStyle(color: Colors.white),
-							  textAlign: TextAlign.left,
+					  top: 60,
+					  left: 0,
+					  right: 0,
+					  child: Container(
+						padding: EdgeInsets.symmetric(vertical: 10),
+						color: Colors.black.withAlpha(100),
+						child: Row(
+						  mainAxisAlignment: MainAxisAlignment.spaceAround,
+						  children: [
+							Flexible(
+							  child: GestureDetector(
+								onTap: () => {
+								Share.share(vdonLink)
+								},
+								child: Text(
+								  "Open URL in OBS Browser Source:\n$vdonLink",
+								  style: TextStyle(color: Colors.white),
+								  textAlign: TextAlign.right,
+								),
+							  ),
 							),
-						  ),
-						],
+						  ],
+						),
 					  ),
 					),
-				  ),
-				  callControls(),
+					callControls(),
 				],
 			  ),
 			),
