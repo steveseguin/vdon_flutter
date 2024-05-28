@@ -519,7 +519,7 @@ class _CallSampleState extends State<CallSample> {
 	  key: key,
 	  extendBodyBehindAppBar: true,
 	  appBar: PreferredSize(
-		preferredSize: Size.fromHeight(56.0), // Adjust the height as needed
+		preferredSize: Size.fromHeight(65.0), // Adjust the height as needed
 		child: SafeArea(
 		  child: AppBar(
 			backgroundColor: Colors.transparent,
@@ -534,7 +534,7 @@ class _CallSampleState extends State<CallSample> {
 					color: Colors.white,
 					onPressed: () => Navigator.of(context).pop(),
 				  ),
-				  SizedBox(width: 8), // Add spacing between the buttons
+				  SizedBox(width: 2), // Add spacing between the buttons
 				  IconButton(
 					icon: Icon(Icons.info),
 					color: Colors.white,
