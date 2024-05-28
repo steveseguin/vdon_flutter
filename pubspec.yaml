@@ -1,7 +1,7 @@
 name: vdo_ninja
-description: Simple capture app for VDO.NInja
-version: 5.0.26+26
-versionCode: 26
+description: Simple capture app for VDO.Ninja
+version: 5.0.27+27
+versionCode: 27
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   convert: ^3.0.0
   cupertino_icons: ^1.0.2
-  flutter_webrtc: ^0.9.41
+  flutter_webrtc: ^0.10.6
   shared_preferences: ^2.0.8
   http: ^1.1.0
   path_provider: ^2.0.2
