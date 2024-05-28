@@ -518,24 +518,32 @@ class _CallSampleState extends State<CallSample> {
 	return Scaffold(
 	  key: key,
 	  extendBodyBehindAppBar: true,
-	  appBar: AppBar(
-		backgroundColor: Colors.transparent,
-		elevation: 0,
-		leadingWidth: 100, // Set the width to fit both buttons
-		leading: Row(
-		  children: [
-			IconButton(
-			  icon: Icon(Icons.arrow_back),
-			  color: Colors.white,
-			  onPressed: () => Navigator.of(context).pop(),
+	  appBar: PreferredSize(
+		preferredSize: Size.fromHeight(56.0), // Adjust the height as needed
+		child: SafeArea(
+		  child: AppBar(
+			backgroundColor: Colors.transparent,
+			elevation: 0,
+			leadingWidth: 120, // Adjust the width to fit both buttons and spacing
+			leading: Padding(
+			  padding: const EdgeInsets.only(left: 8.0), // Adjust left padding if necessary
+			  child: Row(
+				children: [
+				  IconButton(
+					icon: Icon(Icons.arrow_back),
+					color: Colors.white,
+					onPressed: () => Navigator.of(context).pop(),
+				  ),
+				  SizedBox(width: 8), // Add spacing between the buttons
+				  IconButton(
+					icon: Icon(Icons.info),
+					color: Colors.white,
+					onPressed: () => _info(),
+			      ),
+				],
+			  ),
 			),
-			SizedBox(width: 3),
-			IconButton(
-			  icon: Icon(Icons.info),
-			  color: Colors.white,
-			  onPressed: () => _info(),
-			),
-		  ],
+		  ),
 		),
 	  ),
 	  body: Center(
