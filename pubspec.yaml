@@ -1,7 +1,7 @@
 name: vdo_ninja
 description: Simple capture app for VDO.Ninja
-version: 5.0.27+27
-versionCode: 27
+version: 5.0.29+29
+versionCode: 29
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
@@ -15,25 +15,28 @@ dependencies:
   shared_preferences: ^2.0.8
   http: ^1.1.0
   path_provider: ^2.0.2
-  wakelock: ^0.6.1+1
-  js: ^0.6.3
+  wakelock:
+    git:
+      url: https://github.com/steveseguin/wakelock
+      ref: main
+      path: wakelock
+  
+  js: ^0.6.4
   share: ^2.0.4
   webview_flutter: ^4.2.2
   url_launcher: ^6.0.12
   permission_handler: ^11.1.0
   encrypt: ^5.0.1
   tuple: ^2.0.2
-  device_info_plus: ^8.2.2
+  device_info_plus: ^10.1.0
   flutter_background:
     git:
-      url: https://github.com/JulianAssmann/flutter_background
-      ref: master    
+      url: https://github.com/steveseguin/flutter_background/
+      ref: master   
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-    
 
 flutter:
   uses-material-design: true

@@ -254,7 +254,8 @@ class _MyAppState extends State < MyApp > {
 	   }
 	 }
   }
-  void showDemoDialog < T > ({
+
+  void showDemoDialog<T>({
     required BuildContext context,
     required Widget child
   }) {

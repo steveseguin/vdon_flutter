@@ -11,23 +11,26 @@
     <uses-feature android:name="android.hardware.camera.autofocus" />
 	<uses-feature android:name="android.hardware.usb.host" android:required="false" tools:node="replace"/>
 	
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
-	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-	
-
-<!-- Needed to communicate with already-paired Bluetooth devices. (Legacy up to Android 11) -->
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-<!-- Needed to communicate with already-paired Bluetooth devices. (Android 12 upwards)-->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+	<uses-permission android:name="android.permission.INTERNET"/>
+	<uses-permission android:name="android.permission.CAMERA"/>
+	<uses-permission android:name="android.permission.RECORD_AUDIO"/>
+	<uses-permission android:name="android.permission.WAKE_LOCK"/>
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+	<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+	<uses-permission android:name="android.permission.CAPTURE_AUDIO_HOTWORD"/>
+	<uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"/>
+	<uses-permission android:name="android.permission.CAPTURE_MEDIA_OUTPUT"/>
+	<uses-permission android:name="android.permission.CAPTURE_TUNER_AUDIO_INPUT"/>
+	<uses-permission android:name="android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT"/>
+	<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+	<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
 	
     <!-- io.flutter.app.FlutterApplication is an android.app.Application that
          calls FlutterMain.startInitialization(this); in its onCreate method.
@@ -71,8 +74,6 @@
         android:label="VDO.Ninja"
         android:icon="@mipmap/ic_launcher">
 		
-		
-		
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
@@ -97,7 +98,7 @@
             </intent-filter>
         </activity>
 		
-		<service android:name="de.julianassmann.flutter_background.IsolateHolderService" android:exported="true"  android:enabled="true" android:foregroundServiceType="camera|microphone|mediaProjection"/>
+		<service android:name="de.julianassmann.flutter_background.IsolateHolderService" tools:replace="android:foregroundServiceType" android:exported="true" android:enabled="true" android:foregroundServiceType="camera|microphone|mediaProjection"/>
 		
     </application>
 </manifest>
