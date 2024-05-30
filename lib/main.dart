@@ -15,6 +15,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io' show Platform;
+import 'package:flutter/services.dart';
 
 Future<bool> isIosVersionSupported() async {
   DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
@@ -29,15 +30,23 @@ Future<bool> isIosVersionSupported() async {
   return true;
 }
 
-
 void main() async {
- await WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
- if (WebRTC.platformIsDesktop) {
-   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
- } 
+  if (WebRTC.platformIsDesktop) {
+    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+  } 
 
- runApp(MyApp());
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent, // Make the status bar transparent
+    statusBarIconBrightness: Brightness.light, // Light icons for the status bar
+    systemNavigationBarColor: Colors.black, // Navigation bar color
+    systemNavigationBarIconBrightness: Brightness.light, // Light icons for the navigation bar
+  ));
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  runApp(MyApp());
 }
 
 Future<bool> startForegroundService() async {
@@ -155,6 +164,7 @@ class _MyAppState extends State < MyApp > {
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           title: Text('VDO.Ninja'),
+		  backgroundColor: Colors.blue,
         ),
         body: Container(
           child: Stack(

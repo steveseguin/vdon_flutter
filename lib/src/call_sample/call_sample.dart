@@ -614,7 +614,7 @@ class _CallSampleState extends State<CallSample> {
 						left: 0,
 						right: 0,
 						child: Container(
-						  padding: EdgeInsets.symmetric(vertical: 10),
+						  padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
 						  color: Colors.black.withAlpha(100),
 						  child: Row(
 							mainAxisAlignment: MainAxisAlignment.end,
