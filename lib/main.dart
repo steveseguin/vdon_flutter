@@ -36,7 +36,7 @@ void main() async {
   if (WebRTC.platformIsDesktop) {
     debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
   } 
-
+  
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
     statusBarColor: Colors.transparent, // Make the status bar transparent
     statusBarIconBrightness: Brightness.light, // Light icons for the status bar
@@ -50,36 +50,32 @@ void main() async {
 }
 
 Future<bool> startForegroundService() async {
-	final androidConfig = FlutterBackgroundAndroidConfig(
-		notificationTitle: 'VDO.Ninja background service',
-		notificationText: 'VDO.Ninja background service',
-		notificationImportance: AndroidNotificationImportance.Default,
-		notificationIcon: AndroidResource(
-		  name: 'background_icon',
-		  defType: 'drawable'
-		),
-	);
+    final androidConfig = FlutterBackgroundAndroidConfig(
+        notificationTitle: 'VDO.Ninja background service',
+        notificationText: 'VDO.Ninja background service',
+        notificationImportance: AndroidNotificationImportance.Default,
+        notificationIcon: AndroidResource(
+            name: 'background_icon',
+            defType: 'drawable',
+        )
+    );
 
-	try {
-		await FlutterBackground.initialize(androidConfig: androidConfig); 
+    try {
+        await FlutterBackground.initialize(androidConfig: androidConfig);
+		await FlutterBackground.enableBackgroundExecution();
+        return true;
+    } catch (e) {
 		try {
-			await FlutterBackground.enableBackgroundExecution();
-		} catch (e) {
-		}
-
-		bool initialized = await FlutterBackground.initialize(androidConfig: androidConfig);
-		if (initialized) {
+			await FlutterBackground.initialize(androidConfig: androidConfig);
 			await FlutterBackground.enableBackgroundExecution();
 			return true;
-		} else {
-			print('Error: FlutterBackground not initialized');
-			return false;
+		} catch (e) {
+			print('Error initializing FlutterBackground: $e');
 		}
-	} catch (e) {
-		print('Error initializing FlutterBackground: $e');
-		return false;
-	}
+        return false;
+    }
 }
+
 class MyApp extends StatefulWidget {
   @override
   _MyAppState createState() => new _MyAppState();
@@ -214,6 +210,14 @@ class _MyAppState extends State < MyApp > {
   }
   _initData() async {
 	  
+	if (WebRTC.platformIsAndroid) {
+	   bool serviceStarted = await startForegroundService();
+	   if (!serviceStarted) {
+		 // Handle the failure appropriately
+		 print('Failed to start foreground service');
+	   }
+	 }
+	  
     _prefs = await SharedPreferences.getInstance();
 	//await _prefs.clear();
 	
@@ -256,13 +260,7 @@ class _MyAppState extends State < MyApp > {
       Wakelock.enable();
     });
 	
-    if (WebRTC.platformIsAndroid) {
-	   bool serviceStarted = await startForegroundService();
-	   if (!serviceStarted) {
-		 // Handle the failure appropriately
-		 print('Failed to start foreground service');
-	   }
-	 }
+    
   }
 
   void showDemoDialog<T>({

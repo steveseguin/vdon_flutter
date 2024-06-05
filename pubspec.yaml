@@ -1,7 +1,7 @@
 name: vdo_ninja
 description: Simple capture app for VDO.Ninja
-version: 5.0.31+31
-versionCode: 31
+version: 5.0.37+37
+versionCode: 37
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
@@ -21,7 +21,7 @@ dependencies:
       ref: main
       path: wakelock
   
-  js: ^0.6.4
+  js: ^0.7.1
   share: ^2.0.4
   webview_flutter: ^4.2.2
   url_launcher: ^6.0.12

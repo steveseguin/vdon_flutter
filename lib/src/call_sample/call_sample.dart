@@ -377,75 +377,28 @@ class _CallSampleState extends State<CallSample> {
       double buttonWidth = 60;
       List<Widget> buttons = [];
 
-     /*  if (_microphones.length > 1) {
-		  buttons.add(
-			Stack(
-			  alignment: Alignment.center,
-			  children: [
-				RawMaterialButton(
-				  constraints: BoxConstraints(minWidth: buttonWidth),
-				  visualDensity: VisualDensity.comfortable,
-				  onPressed: () => {_toggleMic()},
-				  fillColor: muted ? Colors.red : Colors.green,
-				  child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
-				  shape: CircleBorder(),
-				  elevation: 2,
-				  padding: EdgeInsets.all(15),
-				),
-				Positioned(
-				  top: -11, // Adjust this value as needed
-				  right: -11, // Adjust this value as needed
-				  child: Container(
-					padding: EdgeInsets.only(top: 10, right: 10), // Add padding to prevent cropping
-					child: PopupMenuButton<String>(
-					  onSelected: (String newValue) {
-						setState(() {
-						  _selectedMicrophoneId = newValue;
-						  _signaling.changeAudioSource(_selectedMicrophoneId);
-						});
-					  },
-					  itemBuilder: (BuildContext context) {
-						return _microphones.map((MediaDeviceInfo device) {
-						  return PopupMenuItem<String>(
-							value: device.deviceId,
-							child: Text(device.label),
-						  );
-						}).toList();
-					  },
-					  child: Icon(Icons.arrow_drop_down_circle, color: Colors.white, size: 20), // Adjust size as needed
-					),
-				  ),
-				),
-			  ],
-			),
-		  );
-		} else { */
-		  // Add the original mute button if there's only one microphone source
-		  buttons.add(
-			RawMaterialButton(
-			  constraints: BoxConstraints(minWidth: buttonWidth),
-			  visualDensity: VisualDensity.comfortable,
-			  onPressed: () => {_toggleMic()},
-			  fillColor: muted ? Colors.red : Colors.green,
-			  child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
-			  shape: CircleBorder(),
-			  elevation: 2,
-			  padding: EdgeInsets.all(15),
-			),
-		  );
-		//}
-	  
+      buttons.add(
+        RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: () => {_toggleMic()},
+          fillColor: muted ? Colors.red : Colors.green,
+          child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(15),
+        ),
+      );
 
-	  if (widget.deviceID == 'microphone') { 
-		//
+      if (widget.deviceID == 'microphone') {
+        //
       } else if (widget.deviceID != 'screen') {
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
           onPressed: () => {_togglePreview()},
           fillColor: preview ? Colors.green : Colors.red,
-          child:
-              preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
+          child: preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
           shape: CircleBorder(),
           elevation: 2,
           padding: EdgeInsets.all(15),
@@ -461,7 +414,7 @@ class _CallSampleState extends State<CallSample> {
           elevation: 2,
           padding: EdgeInsets.all(15),
         ));
-		
+
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
@@ -496,18 +449,20 @@ class _CallSampleState extends State<CallSample> {
         padding: EdgeInsets.all(15),
       ));
 
-      return Padding(
-        padding: const EdgeInsets.all(10.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(50),
-          child: Container(
-            color: Colors.black.withAlpha(100),
-            child: SizedBox(
-              height: 80,
-              width: MediaQuery.of(context).size.width,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: buttons,
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(50),
+            child: Container(
+              color: Colors.black.withAlpha(100),
+              child: SizedBox(
+                height: 80,
+                width: MediaQuery.of(context).size.width,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: buttons,
+                ),
               ),
             ),
           ),
@@ -515,134 +470,134 @@ class _CallSampleState extends State<CallSample> {
       );
     }
 
-	return Scaffold(
-	  key: key,
-	  extendBodyBehindAppBar: true,
-	  appBar: PreferredSize(
-		preferredSize: Size.fromHeight(30.0), // Adjust the height as needed
-		child: SafeArea(
-		  child: AppBar(
-			backgroundColor: Colors.transparent,
-			elevation: 0,
-			leadingWidth: 120, // Adjust the width to fit both buttons and spacing
-			leading: Padding(
-			  padding: const EdgeInsets.only(left: 3.0), // Adjust left padding if necessary
-			  child: Row(
-				children: [
-				  IconButton(
-					icon: Icon(Icons.arrow_back),
-					color: Colors.white,
-					onPressed: () => Navigator.of(context).pop(),
-				  ),
-				  SizedBox(width: 2), // Add spacing between the buttons
-				  IconButton(
-					icon: Icon(Icons.info),
-					color: Colors.white,
-					onPressed: () => _info(),
-			      ),
-				],
-			  ),
-			),
-		  ),
-		),
-	  ),
-	  body: Center(
-		child: Column(
-		  mainAxisAlignment: MainAxisAlignment.start,
-		  children: [
-			Expanded(
-			  child: Stack(
-				alignment: Alignment.bottomCenter,
-				children: [
-				  widget.deviceID != 'screen'
-					  ? widget.deviceID != 'microphone'
-						  ? GestureDetector(
-							  onVerticalDragUpdate: (details) {
-								double delta = details.primaryDelta ?? 0.0;
-								if (delta > 0) {
-								  // User is swiping down, zoom out
-								  _zoomCamera(0.04); // Adjust the zoom factor as needed
-								} else if (delta < 0) {
-								  // User is swiping up, zoom in
-								  _zoomCamera(-0.04); // Adjust the zoom factor as needed
-								}
-							  },
-							  child: RTCVideoView(
-								_localRenderer,
-								objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-								mirror: widget.deviceID == "rear" || widget.deviceID == "environment" || widget.deviceID.contains("0") ? !mirrored : mirrored
-							  ),
-							)
-						  : Container(
-							  color: Theme.of(context).canvasColor,
-							  child: Column(
-								mainAxisAlignment: MainAxisAlignment.center,
-								crossAxisAlignment: CrossAxisAlignment.center,
-								children: [
-								  Padding(
-									padding: const EdgeInsets.all(20.0),
-									child: Text(
-									  "Open the view link in a browser.  If it doesn't auto-play, click the page.",
-									  textAlign: TextAlign.center,
-									  style: TextStyle(
-										  color: Colors.white, fontSize: 20),
-									),
-								  ),
-								],
-							  ),
-							)
-					  : Container(
-						  color: Theme.of(context).canvasColor,
-						  child: Column(
-							mainAxisAlignment: MainAxisAlignment.center,
-							crossAxisAlignment: CrossAxisAlignment.center,
-							children: [
-							  Padding(
-								padding: const EdgeInsets.all(20.0),
-								child: Text(
-								  "Open the view link to see the screen's output. Permission to share the screen must be granted.",
-								  textAlign: TextAlign.center,
-								  style: TextStyle(
-									  color: Colors.white, fontSize: 20),
-								),
-							  ),
-							],
-						  ),
-						),
-				  Positioned(
-						top: 55,
-						left: 0,
-						right: 0,
-						child: Container(
-						  padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
-						  color: Colors.black.withAlpha(100),
-						  child: Row(
-							mainAxisAlignment: MainAxisAlignment.end,
-							children: [
-							  Flexible(
-								child: GestureDetector(
-								  onTap: () => {
-									Share.share(vdonLink)
-								  },
-								  child: Text(
-									"Open URL in OBS Browser Source:\n$vdonLink",
-									style: TextStyle(color: Colors.white),
-									textAlign: TextAlign.right,
-								  ),
-								),
-							  ),
-							],
-						  ),
-						),
-					  ),
-					  callControls(),
-				],
-			  ),
-			),
-		  ],
-		),
-	  ),
-	  backgroundColor: const Color(0x000000ff),
-	);
+    return Scaffold(
+      key: key,
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(30.0), // Adjust the height as needed
+        child: SafeArea(
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leadingWidth: 120, // Adjust the width to fit both buttons and spacing
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 3.0), // Adjust left padding if necessary
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back),
+                    color: Colors.white,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  SizedBox(width: 2), // Add spacing between the buttons
+                  IconButton(
+                    icon: Icon(Icons.info),
+                    color: Colors.white,
+                    onPressed: () => _info(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                children: [
+                  widget.deviceID != 'screen'
+                      ? widget.deviceID != 'microphone'
+                          ? GestureDetector(
+                              onVerticalDragUpdate: (details) {
+                                double delta = details.primaryDelta ?? 0.0;
+                                if (delta > 0) {
+                                  // User is swiping down, zoom out
+                                  _zoomCamera(0.04); // Adjust the zoom factor as needed
+                                } else if (delta < 0) {
+                                  // User is swiping up, zoom in
+                                  _zoomCamera(-0.04); // Adjust the zoom factor as needed
+                                }
+                              },
+                              child: RTCVideoView(
+                                _localRenderer,
+                                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                                mirror: widget.deviceID == "rear" ||
+                                        widget.deviceID == "environment" ||
+                                        widget.deviceID.contains("0")
+                                    ? !mirrored
+                                    : mirrored,
+                              ),
+                            )
+                          : Container(
+                              color: Theme.of(context).canvasColor,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(20.0),
+                                    child: Text(
+                                      "Open the view link in a browser.  If it doesn't auto-play, click the page.",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white, fontSize: 20),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                      : Container(
+                          color: Theme.of(context).canvasColor,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(20.0),
+                                child: Text(
+                                  "Open the view link to see the screen's output. Permission to share the screen must be granted.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white, fontSize: 20),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                  Positioned(
+                    top: 55,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+                      color: Colors.black.withAlpha(100),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Flexible(
+                            child: GestureDetector(
+                              onTap: () => {Share.share(vdonLink)},
+                              child: Text(
+                                "Open URL in OBS Browser Source:\n$vdonLink",
+                                style: TextStyle(color: Colors.white),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  callControls(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      backgroundColor: const Color(0x000000ff),
+    );
   }
 }

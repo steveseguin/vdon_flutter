@@ -10,7 +10,7 @@ import 'package:tuple/tuple.dart';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
-
+import 'package:flutter_background/flutter_background.dart';
 import 'package:convert/convert.dart';
 
 
@@ -494,6 +494,33 @@ class Signaling {
 
     await _socket.connect(streamID+hashcode, WSSADDRESS, UUID);
   }
+  
+  Future<bool> startForegroundService() async {
+		final androidConfig = FlutterBackgroundAndroidConfig(
+			notificationTitle: 'VDO.Ninja background service',
+			notificationText: 'VDO.Ninja background service',
+			notificationImportance: AndroidNotificationImportance.Default,
+			notificationIcon: AndroidResource(
+				name: 'background_icon',
+				defType: 'drawable',
+			)
+		);
+
+		try {
+			await FlutterBackground.initialize(androidConfig: androidConfig);
+			await FlutterBackground.enableBackgroundExecution();
+			return true;
+		} catch (e) {
+			try {
+				await FlutterBackground.initialize(androidConfig: androidConfig);
+				await FlutterBackground.enableBackgroundExecution();
+				return true;
+			} catch (e) {
+				print('Error initializing FlutterBackground: $e');
+			}
+			return false;
+		}
+	}
 
   Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
 
@@ -514,92 +541,117 @@ class Signaling {
 	print("AUDIO DEVICE");
 	print(audioDeviceId);
 	print(deviceID);
+	
+	if (WebRTC.platformIsAndroid) {
+		   bool serviceStarted = await startForegroundService();
+		   if (!serviceStarted) {
+			 // Handle the failure appropriately
+			 print('Failed to start foreground service');
+		   }
+	}
 
     if (deviceID == "screen") {
       if (Platform.isIOS){
 		width = "1280";
 		height = "720";
 		if (audioDeviceId=="default"){
-			stream = await navigator.mediaDevices.getDisplayMedia({
-			  'video': {
-				'deviceId': 'broadcast',
-				'mandatory': {
-				  'width': width,
-				  'height': height,
-				  'maxWidth': width,
-				  'maxHeight': width,
-				  'frameRate': framerate
-				},
-				'width': width,
-				'height': height,
-				'maxWidth': width,
-				'maxHeight': width,
-				'frameRate': framerate
-			  },
-			  'audio': true
-			});
+			try {
+				stream = await navigator.mediaDevices.getDisplayMedia({
+				  'video': {
+					'deviceId': 'broadcast',
+					'mandatory': {
+					  'width': width,
+					  'height': height,
+					  'maxWidth': width,
+					  'maxHeight': width,
+					  'frameRate': framerate
+					},
+					'width': width,
+					'height': height,
+					'maxWidth': width,
+					'maxHeight': width,
+					'frameRate': framerate
+				  },
+				  'audio': true
+				});
+			} catch(e){
+				print(e);
+			}
 		} else {
-			stream = await navigator.mediaDevices.getDisplayMedia({
-			  'video': {
-				'deviceId': 'broadcast',
-				'mandatory': {
-				  'width': width,
-				  'height': height,
-				  'maxWidth': width,
-				  'maxHeight': width,
-				  'frameRate': framerate
-				},
-				'width': width,
-				'height': height,
-				'maxWidth': width,
-				'maxHeight': width,
-				'frameRate': framerate
-			  },
-			  'audio': {'optional':{'sourceId': audioDeviceId},}
-			});
+			try {
+				stream = await navigator.mediaDevices.getDisplayMedia({
+				  'video': {
+					'deviceId': 'broadcast',
+					'mandatory': {
+					  'width': width,
+					  'height': height,
+					  'maxWidth': width,
+					  'maxHeight': width,
+					  'frameRate': framerate
+					},
+					'width': width,
+					'height': height,
+					'maxWidth': width,
+					'maxHeight': width,
+					'frameRate': framerate
+				  },
+				  'audio': {'optional':{'sourceId': audioDeviceId},}
+				});
+			} catch(e){
+				print(e);
+			}
 		}
       } else if (audioDeviceId=="default"){
+	  
         width = "1280";
 		height = "720";
-        stream = await navigator.mediaDevices.getDisplayMedia({
-			  'video': {
-				'deviceId': 'broadcast',
-				'mandatory': {
-				  'width': width,
-				  'height': height,
-				  'maxWidth': width,
-				  'maxHeight': width,
-				  'frameRate': framerate
-				},
-				'width': width,
-				'height': height,
-				'maxWidth': width,
-				'maxHeight': width,
-				'frameRate': framerate
-			  },
-			  'audio': true
-			});
+		try {
+			stream = await navigator.mediaDevices.getDisplayMedia({
+				  'video': {
+					'deviceId': 'broadcast',
+					'mandatory': {
+					  'width': width,
+					  'height': height,
+					  'maxWidth': width,
+					  'maxHeight': width,
+					  'frameRate': framerate
+					},
+					'width': width,
+					'height': height,
+					'maxWidth': width,
+					'maxHeight': width,
+					'frameRate': framerate
+				  },
+				  'audio': true
+				});
+		} catch(e){
+			print(e);
+		}
       } else {
 		width = "1280";
 		height = "720";
-        stream = await navigator.mediaDevices.getDisplayMedia({
-			  'video': {
-				'deviceId': 'broadcast',
-				'mandatory': {
-				  'width': width,
-				  'height': height,
-				  'maxWidth': width,
-				  'maxHeight': width,
-				  'frameRate': framerate
-				},
-				'width': width,
-				'height': height,
-				'maxWidth': width,
-				'maxHeight': width,
-				'frameRate': framerate
-			  },
-			  'audio':  {'optional':{'sourceId': audioDeviceId},}
-			});
+		try {
+			stream = await navigator.mediaDevices.getDisplayMedia({
+				  'video': {
+					'deviceId': 'broadcast',
+					'mandatory': {
+					  'width': width,
+					  'height': height,
+					  'maxWidth': width,
+					  'maxHeight': width,
+					  'frameRate': framerate
+					},
+					'width': width,
+					'height': height,
+					'maxWidth': width,
+					'maxHeight': width,
+					'frameRate': framerate
+				  },
+				  'audio':  {'optional':{'sourceId': audioDeviceId},}
+				});
+		} catch(e){
+			print(e);
+		}
 	  }
       if (stream.getAudioTracks().length == 0) {
 		  if (audioDeviceId=="default"){
