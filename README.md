@@ -37,6 +37,9 @@ cd vdon_flutter
 flutter packages get
 flutter run
 ```
+
+`flutter pub upgrade --major-versions` can also be used to update packages.
+
 This works okay for Android; macOS users might want to use Xcode directly instead.  
 
 Mac users building with xcode may also want to have a real iOS device attached for this to work.
