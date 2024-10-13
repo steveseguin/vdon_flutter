@@ -1,3 +1,4 @@
+// main.dart
 import 'dart:core';
 import 'package:flutter/foundation.dart'
 show debugDefaultTargetPlatformOverride;
@@ -16,6 +17,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
+import 'dart:async'; 
 
 Future<bool> isIosVersionSupported() async {
   DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
@@ -30,8 +32,9 @@ Future<bool> isIosVersionSupported() async {
   return true;
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
   if (WebRTC.platformIsDesktop) {
     debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
@@ -47,6 +50,10 @@ void main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(MyApp());
+  }, (error, stackTrace) {
+    print('Caught error: $error');
+    print(stackTrace);
+  });
 }
 
 Future<bool> startForegroundService() async {

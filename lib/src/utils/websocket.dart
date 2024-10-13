@@ -1,3 +1,4 @@
+// websocket.dart
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
@@ -40,9 +41,27 @@ class SimpleWebSocket {
             }, onDone: () {
                 onClose.call(_socket.closeCode, _socket.closeReason);
             });
-        } catch (e) {
-            onClose.call(500, e.toString());
-        }
+        } on SocketException catch (e) {
+			// Handle socket-related errors, e.g., network issues
+			print('WebSocket connection failed (SocketException): ${e.toString()}');
+			onClose.call(500, 'Network error');
+		} on WebSocketException catch (e) {
+			// Handle WebSocket-specific errors
+			print('WebSocket connection failed (WebSocketException): ${e.toString()}');
+			if (e.message.contains('(401)')) { 
+			  onClose.call(401, 'Unauthorized');
+			} else {
+			  onClose.call(500, 'WebSocket error');
+			}
+		} on TimeoutException catch (e) {
+			// Handle connection timeouts
+			print('WebSocket connection timed out: ${e.toString()}');
+			onClose.call(504, 'Connection timeout');
+		} catch (e) {
+			// Handle other unexpected errors
+			print('WebSocket connection failed: ${e.toString()}');
+			onClose.call(500, 'Unknown error');
+		}
     }
 
     send(data) {
