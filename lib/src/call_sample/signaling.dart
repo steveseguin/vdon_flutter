@@ -652,51 +652,51 @@ class Signaling {
         print('Failed to start foreground service');
       }
     }
-
+	print("Device ID being used: $deviceID");
     if (deviceID == "screen") {
-    if (Platform.isIOS) {
-      width = "1280";
-      height = "720";
-      
-      try {
-        // Get display media without audio first
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-            'deviceId': 'broadcast',
-            'mandatory': {
-              'width': width,
-              'height': height,
-              'maxWidth': width,
-              'maxHeight': width,
-              'frameRate': framerate
-            },
-          },
-        });
+		if (Platform.isIOS) {
+		  width = "1280";
+		  height = "720";
+		  
+		  try {
+			// Get display media without audio first
+			stream = await navigator.mediaDevices.getDisplayMedia({
+			  'video': {
+				'deviceId': 'broadcast',
+				'mandatory': {
+				  'width': width,
+				  'height': height,
+				  'maxWidth': width,
+				  'maxHeight': width,
+				  'frameRate': framerate
+				},
+			  },
+			});
 
-        // Add silent audio track only for iOS
-        MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
-        if (silentStream != null) {
-          silentStream.getAudioTracks().forEach((track) async {
-            await stream.addTrack(track);
-          });
-        }
+			// Add silent audio track only for iOS
+			MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
+			if (silentStream != null) {
+			  silentStream.getAudioTracks().forEach((track) async {
+				await stream.addTrack(track);
+			  });
+			}
 
-        // Add selected microphone audio if specified
-        if (audioDeviceId != "default") {
-          MediaStream micStream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-            }
-          });
-          micStream.getAudioTracks().forEach((track) async {
-            await stream.addTrack(track);
-          });
-        }
-      } catch (e) {
-        print('Error setting up iOS screen sharing: $e');
-        rethrow;
-      }
-    } else {
+			// Add selected microphone audio if specified
+			if (audioDeviceId != "default") {
+			  MediaStream micStream = await navigator.mediaDevices.getUserMedia({
+				'audio': {
+				  'optional': {'sourceId': audioDeviceId},
+				}
+			  });
+			  micStream.getAudioTracks().forEach((track) async {
+				await stream.addTrack(track);
+			  });
+			}
+		  } catch (e) {
+			print('Error setting up iOS screen sharing: $e');
+			rethrow;
+		  }
+		} else {
           try {
             stream = await navigator.mediaDevices.getDisplayMedia({
               'video': {
