@@ -48,6 +48,72 @@ String generateHash(String inputStr, [int? length]) {
   }
 }
 
+
+class IosSilentAudioPlayer {
+  MediaStream? _stream;
+  bool _isActive = false;
+  
+  bool get isActive => _isActive;
+  
+  Future<MediaStream?> createSilentAudioStream() async {
+    if (!Platform.isIOS) return null;
+    
+    final Map<String, dynamic> constraints = {
+      'audio': {
+        'mandatory': {
+          'googNoiseSuppression': false,
+          'googEchoCancellation': false,
+          'googAutoGainControl': false,
+          'googHighpassFilter': false,
+          'googNoiseSuppression2': false,
+          'googEchoCancellation2': false,
+          'googAutoGainControl2': false
+        },
+        'optional': []
+      },
+    };
+
+    try {
+      _stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      final audioTrack = _stream?.getAudioTracks().first;
+      if (audioTrack != null) {
+        // Instead of setting volume, we enable/disable the track
+        audioTrack.enabled = true;
+        
+        // Set track settings to minimize audio processing
+        await audioTrack.applyConstraints({
+          'autoGainControl': false,
+          'noiseSuppression': false,
+          'echoCancellation': false
+        });
+        
+        _isActive = true;
+      }
+      
+      return _stream;
+    } catch (e) {
+      print('Failed to create iOS silent audio stream: $e');
+      _isActive = false;
+      return null;
+    }
+  }
+
+  void dispose() {
+    if (_stream != null) {
+      _stream?.getTracks().forEach((track) {
+        track.enabled = false;
+        track.stop();
+      });
+      _stream = null;
+    }
+    _isActive = false;
+  }
+}
+
+// Add this as a class variable in your Signaling class
+final _iosSilentAudio = IosSilentAudioPlayer();
+
 /*
  * callbacks for Signaling API.
  */
@@ -588,33 +654,49 @@ class Signaling {
     }
 
     if (deviceID == "screen") {
-      if (Platform.isIOS) {
-        width = "1280";
-        height = "720";
-        if (audioDeviceId == "default") {
-          try {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              'video': {
-                'deviceId': 'broadcast',
-                'mandatory': {
-                  'width': width,
-                  'height': height,
-                  'maxWidth': width,
-                  'maxHeight': width,
-                  'frameRate': framerate
-                },
-                'width': width,
-                'height': height,
-                'maxWidth': width,
-                'maxHeight': width,
-                'frameRate': framerate
-              },
-              'audio': true
-            });
-          } catch (e) {
-            print(e);
-          }
-        } else {
+    if (Platform.isIOS) {
+      width = "1280";
+      height = "720";
+      
+      try {
+        // Get display media without audio first
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          'video': {
+            'deviceId': 'broadcast',
+            'mandatory': {
+              'width': width,
+              'height': height,
+              'maxWidth': width,
+              'maxHeight': width,
+              'frameRate': framerate
+            },
+          },
+        });
+
+        // Add silent audio track only for iOS
+        MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
+        if (silentStream != null) {
+          silentStream.getAudioTracks().forEach((track) async {
+            await stream.addTrack(track);
+          });
+        }
+
+        // Add selected microphone audio if specified
+        if (audioDeviceId != "default") {
+          MediaStream micStream = await navigator.mediaDevices.getUserMedia({
+            'audio': {
+              'optional': {'sourceId': audioDeviceId},
+            }
+          });
+          micStream.getAudioTracks().forEach((track) async {
+            await stream.addTrack(track);
+          });
+        }
+      } catch (e) {
+        print('Error setting up iOS screen sharing: $e');
+        rethrow;
+      }
+    } else {
           try {
             stream = await navigator.mediaDevices.getDisplayMedia({
               'video': {
@@ -722,7 +804,6 @@ class Signaling {
         audioStream.getAudioTracks().forEach((element) async {
           await stream.addTrack(element);
         });
-      }
     } else if (deviceID == "front" ||
         deviceID.contains("1") ||
         deviceID == "user") {
@@ -1127,7 +1208,10 @@ class Signaling {
 
   Future<void> _cleanSessions() async {
     active = false;
-
+    
+      if (Platform.isIOS) {
+        _iosSilentAudio.dispose();
+    }
     if (_localStream != null) {
       // Add null check
       _localStream!.getTracks().forEach((element) async {

@@ -107,28 +107,28 @@ class _MyAppState extends State < MyApp > {
   List < RouteItem > items = [];
   late SharedPreferences _prefs;
   var _deviceID = "screen";
-  List < Color > colors = [
+List<Color> colors = const [
     Color(0xFFA53E97),
     Color(0xFF645098),
     Color(0xFF33517E),
     Colors.amber,
     Colors.red,
-    Color(0xF133511E),
-    Color(0xF233512E),
-    Color(0xF333513E),
-    Color(0xF433514E),
-    Color(0xF533515E),
-    Color(0xF633516E),
-    Color(0xF733517E),
-    Color(0xF833518E),
-    Color(0xF933519E),
-    Color(0xFF33510E),
-    Color(0xFF33517E),
-    Color(0xFF33517E),
-    Color(0xFF33517E),
-    Color(0xFF33517E),
-    Color(0xFF33517E)
-  ];
+    Color(0xFF133511),  // Fixed the format of these colors
+    Color(0xFF233512),
+    Color(0xFF333513),
+    Color(0xFF433514),
+    Color(0xFF533515),
+    Color(0xFF633516),
+    Color(0xFF733517),
+    Color(0xFF833518),
+    Color(0xFF933519),
+    Color(0xFF335110),
+    Color(0xFF335171),
+    Color(0xFF335172),
+    Color(0xFF335173),
+    Color(0xFF335174),
+    Color(0xFF335175)
+];
   @override
   initState() {
     super.initState();
@@ -300,14 +300,14 @@ class _MyAppState extends State < MyApp > {
       }
     });
   }
-  _showAddressDialog(context) {
-    showDemoDialog < DialogDemoAction > (
-      context: context,
-      child: AlertDialog(
-          title: const Text('Publishing settings'),
-          scrollable: true,
-		  backgroundColor: theme.cardTheme.color,
-		  surfaceTintColor: Colors.transparent,
+_showAddressDialog(context) {
+  showDemoDialog<DialogDemoAction>(
+    context: context,
+    child: AlertDialog(
+      title: const Text('Publishing settings'),
+      scrollable: true,
+      backgroundColor: ninjaDialogColor,  // Use the dialog color instead of card color
+      surfaceTintColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           contentPadding: EdgeInsets.only(left: 10, right: 10, bottom: MediaQuery.of(context).viewInsets.bottom),
           content: SingleChildScrollView(
@@ -316,7 +316,7 @@ class _MyAppState extends State < MyApp > {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
                     child: TextField(
-                      onChanged: (String text) {
+                    style: TextStyle(color: Colors.white),                      onChanged: (String text) {
                         setState(() {
                           streamID = text;
                           _prefs.setString('streamID', streamID);
@@ -332,7 +332,7 @@ class _MyAppState extends State < MyApp > {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 55, 0, 0),
                     child: TextField(
-                      controller: TextEditingController()..text = roomID ?? "",
+                    style: TextStyle(color: Colors.white),                      controller: TextEditingController()..text = roomID ?? "",
                       onChanged: (String text) {
                         setState(() {
                           roomID = text;
@@ -349,7 +349,7 @@ class _MyAppState extends State < MyApp > {
 				Padding(
                   padding: const EdgeInsets.fromLTRB(0, 110, 0, 0),
                     child: TextField(
-                      controller: TextEditingController()..text = password ?? "",
+                    style: TextStyle(color: Colors.white),                      controller: TextEditingController()..text = password ?? "",
                       onChanged: (String textpass) {
                         setState(() {
                           password = textpass;
@@ -367,7 +367,9 @@ class _MyAppState extends State < MyApp > {
 				  padding: const EdgeInsets.fromLTRB(0, 190, 0, 0),
 				  child: DropdownButton<String>(
 					value: _selectedMicrophoneId,
-					onChanged: (String? newValue) {
+                    dropdownColor: ninjaDialogColor,
+                    style: TextStyle(color: Colors.white),
+  					onChanged: (String? newValue) {
 					  if (newValue != null) {
 						_prefs.setString('audioDeviceId', newValue);
 						setState(() {
@@ -377,7 +379,6 @@ class _MyAppState extends State < MyApp > {
 						});
 					  }
 					},
-					dropdownColor: Colors.grey[200], // Set the dropdown background color here
 					items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
 					  return DropdownMenuItem<String>(
 						value: device.deviceId,
@@ -390,7 +391,7 @@ class _MyAppState extends State < MyApp > {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 240, 0, 0),
                     child: SwitchListTile(
-                      title: const Text('Prefer 1080p'),
+                      title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
                         value: quality,
                         onChanged: (bool value) {
                           _prefs.setBool('resolution', value);
@@ -404,7 +405,7 @@ class _MyAppState extends State < MyApp > {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 280, 0, 0),
                     child: SwitchListTile(
-                      title: const Text('Force landscape'),
+                      title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
                         value: landscape,
                         onChanged: (bool value) {
                           _prefs.setBool('landscape', value);
@@ -419,8 +420,10 @@ class _MyAppState extends State < MyApp > {
                 if (!advanced)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
+                    
                       child: SwitchListTile(
-                        title: const Text('Advanced'),
+                      
+                        title: const Text('Advanced', style: TextStyle(color: Colors.white)),
                           value: advanced,
                           onChanged: (bool value) {
                             _prefs.setBool('advanced', value);
@@ -435,7 +438,7 @@ class _MyAppState extends State < MyApp > {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
                         child: TextField(
-                          onChanged: (String text) {
+                        style: TextStyle(color: Colors.white),                          onChanged: (String text) {
                             setState(() {
                               WSSADDRESS = text;
                               _prefs.setString('WSSADDRESS', WSSADDRESS);
@@ -452,7 +455,7 @@ class _MyAppState extends State < MyApp > {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(0, 375, 0, 0),
                           child: TextField(
-                            onChanged: (String text) {
+                          style: TextStyle(color: Colors.white),                            onChanged: (String text) {
                               setState(() {
                                 TURNSERVER = text;
                                 _prefs.setString('TURNSERVER', TURNSERVER);
@@ -466,19 +469,33 @@ class _MyAppState extends State < MyApp > {
                           ),
                       ),
               ])),
-          actions: < Widget > [
-            TextButton(
-              child: const Text('CANCEL'),
-                onPressed: () {
-                  Navigator.pop(context, DialogDemoAction.cancel);
-                }),
-            TextButton(
-              child: const Text('CONNECT'),
-                onPressed: () {
-                  Navigator.pop(context, DialogDemoAction.connect);
-                })
-          ]));
-  }
+                actions: <Widget>[
+  TextButton(
+    child: Text('CANCEL',  // Removed const
+      style: TextStyle(
+        color: ninjaAccentColor,
+        fontWeight: FontWeight.bold
+      )
+    ),
+    onPressed: () {
+      Navigator.pop(context, DialogDemoAction.cancel);
+    }
+  ),
+  TextButton(
+    child: Text('CONNECT',  // Removed const
+      style: TextStyle(
+        color: ninjaAccentColor,
+        fontWeight: FontWeight.bold
+      )
+    ),
+    onPressed: () {
+      Navigator.pop(context, DialogDemoAction.connect);
+    }
+  )
+]
+        )
+      );
+    }
   _initItems() async {
 	  
     items = < RouteItem > [];
