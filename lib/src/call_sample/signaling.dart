@@ -626,511 +626,158 @@ class Signaling {
     }
   }
 
-  Future<MediaStream> createStream(
-      bool userScreen, String deviceID, String audioDeviceId) async {
-    String width = "1280";
-    String height = "720";
-    String framerate = "30";
+  Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
+  String width = quality ? "1920" : "1280";
+  String height = quality ? "1080" : "720";
+  String framerate = quality ? "60" : "30";
+  late MediaStream stream;
 
-    late MediaStream audioStream;
-    late MediaStream stream;
-
-    if (quality) {
-      width = "1920";
-      height = "1080";
-      String framerate = "60";
+  if (WebRTC.platformIsAndroid) {
+    bool serviceStarted = await startForegroundService();
+    if (!serviceStarted) {
+      print('Failed to start foreground service');
     }
+  }
 
-    print("AUDIO DEVICE");
-    print(audioDeviceId);
-    print(deviceID);
-
-    if (WebRTC.platformIsAndroid) {
-      bool serviceStarted = await startForegroundService();
-      if (!serviceStarted) {
-        // Handle the failure appropriately
-        print('Failed to start foreground service');
-      }
-    }
-	print("Device ID being used: $deviceID");
-    if (deviceID == "screen") {
-		if (Platform.isIOS) {
-		  width = "1280";
-		  height = "720";
-		  
-		  try {
-			// Get display media without audio first
-			stream = await navigator.mediaDevices.getDisplayMedia({
-			  'video': {
-				'deviceId': 'broadcast',
-				'mandatory': {
-				  'width': width,
-				  'height': height,
-				  'maxWidth': width,
-				  'maxHeight': width,
-				  'frameRate': framerate
-				},
-			  },
-			});
-
-			// Add silent audio track only for iOS
-			MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
-			if (silentStream != null) {
-			  silentStream.getAudioTracks().forEach((track) async {
-				await stream.addTrack(track);
-			  });
-			}
-
-			// Add selected microphone audio if specified
-			if (audioDeviceId != "default") {
-			  MediaStream micStream = await navigator.mediaDevices.getUserMedia({
-				'audio': {
-				  'optional': {'sourceId': audioDeviceId},
-				}
-			  });
-			  micStream.getAudioTracks().forEach((track) async {
-				await stream.addTrack(track);
-			  });
-			}
-		  } catch (e) {
-			print('Error setting up iOS screen sharing: $e');
-			rethrow;
-		  }
-		} else {
-          try {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              'video': {
-                'deviceId': 'broadcast',
-                'mandatory': {
-                  'width': width,
-                  'height': height,
-                  'maxWidth': width,
-                  'maxHeight': width,
-                  'frameRate': framerate
-                },
-                'width': width,
-                'height': height,
-                'maxWidth': width,
-                'maxHeight': width,
-                'frameRate': framerate
-              },
-              'audio': {
-                'optional': {'sourceId': audioDeviceId},
-              }
-            });
-          } catch (e) {
-            print(e);
-          }
+  Map<String, dynamic> getAudioConstraints(String audioDeviceId) {
+    return {
+      'audio': {
+        if (audioDeviceId != "default") 'optional': {'sourceId': audioDeviceId},
+        'mandatory': {
+          'googEchoCancellation': false,
+          'echoCancellation': false,
+          'noiseSuppression': false,
+          'autoGainControl': false
         }
-      } else if (audioDeviceId == "default") {
-        width = "1280";
-        height = "720";
-        try {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            'video': {
-              'deviceId': 'broadcast',
-              'mandatory': {
-                'width': width,
-                'height': height,
-                'maxWidth': width,
-                'maxHeight': width,
-                'frameRate': framerate
-              },
+      }
+    };
+  }
+
+  if (deviceID == "screen") {
+    if (Platform.isIOS) {
+      width = "1280";
+      height = "720";
+      
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          'video': {
+            'deviceId': 'broadcast',
+            'mandatory': {
               'width': width,
               'height': height,
               'maxWidth': width,
               'maxHeight': width,
               'frameRate': framerate
             },
-            'audio': true
-          });
-        } catch (e) {
-          print(e);
-        }
-      } else {
-        width = "1280";
-        height = "720";
-        try {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            'video': {
-              'deviceId': 'broadcast',
-              'mandatory': {
-                'width': width,
-                'height': height,
-                'maxWidth': width,
-                'maxHeight': width,
-                'frameRate': framerate
-              },
-              'width': width,
-              'height': height,
-              'maxWidth': width,
-              'maxHeight': width,
-              'frameRate': framerate
-            },
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-            }
-          });
-        } catch (e) {
-          print(e);
-        }
-      }
-      if (stream.getAudioTracks().length == 0) {
-        if (audioDeviceId == "default") {
-          audioStream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false,
-                'noiseSuppression': false,
-                'autoGainControl': false
-              }
-            }
-          });
-        } else {
-          audioStream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false,
-                'noiseSuppression': false,
-                'autoGainControl': false
-              }
-            }
+          },
+        });
+
+        // Add silent audio track for iOS
+        MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
+        if (silentStream != null) {
+          silentStream.getAudioTracks().forEach((track) async {
+            await stream.addTrack(track);
           });
         }
 
-        audioStream.getAudioTracks().forEach((element) async {
-          await stream.addTrack(element);
-        });
-    } else if (deviceID == "front" ||
-        deviceID.contains("1") ||
-        deviceID == "user") {
-      if (quality) {
-        if (audioDeviceId == "default") {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'user',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-              }
-            }
-          });
-        } else {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'user',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-              }
-            }
+        // Add microphone audio if specified
+        if (audioDeviceId != "default") {
+          MediaStream micStream = await navigator.mediaDevices.getUserMedia(
+            getAudioConstraints(audioDeviceId)
+          );
+          micStream.getAudioTracks().forEach((track) async {
+            await stream.addTrack(track);
           });
         }
-      } else {
-        if (audioDeviceId == "default") {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'user',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-                'frameRate': framerate
-              }
-            }
-          });
-        } else {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'user',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-                'frameRate': framerate
-              }
-            }
-          });
-          print({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'user',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-                'frameRate': framerate
-              }
-            }
-          });
-        }
-      }
-    } else if (deviceID == "microphone") {
-      if (audioDeviceId == "default") {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': false
-        });
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            // 'deviceId': audioDeviceId,
-            'mandatory': {},
-            'optional': [
-              {'sourceId': audioDeviceId.toString()}
-            ],
-          },
-          'video': false
-        });
-        print("MIC ONLY");
-        print({
-          'audio': {
-            // 'deviceId': audioDeviceId,
-            'optional': [
-              {'sourceId': audioDeviceId.toString()}
-            ],
-          },
-          'video': false
-        });
-      }
-    } else if (deviceID == "rear" ||
-        deviceID == "environment" ||
-        deviceID.contains("0")) {
-      if (quality) {
-        if (audioDeviceId == "default") {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'environment',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-              }
-            }
-          });
-        } else {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'facingMode': 'environment',
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-              }
-            }
-          });
-        }
-      } else if (audioDeviceId == "default") {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'facingMode': 'environment',
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'frameRate': framerate
-            }
-          }
-        });
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'optional': {'sourceId': audioDeviceId},
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'facingMode': 'environment',
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'frameRate': framerate
-            }
-          }
-        });
-        print({
-          'audio': {
-            'optional': {'sourceId': audioDeviceId},
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'facingMode': 'environment',
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'frameRate': framerate
-            }
-          }
-        });
+      } catch (e) {
+        print('Error getting display media: $e');
       }
     } else {
-      //var devices =  await navigator.mediaDevices.enumerateDevices();
-      if (quality) {
-        if (audioDeviceId == "default") {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          'video': {
+            'deviceId': 'broadcast',
+            'mandatory': {
+              'width': width,
+              'height': height,
+              'maxWidth': width,
+              'maxHeight': width,
+              'frameRate': framerate
             },
-            'video': {
-              'deviceId': deviceID,
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-              }
-            }
-          });
-        } else {
-          stream = await navigator.mediaDevices.getUserMedia({
-            'audio': {
-              'optional': {'sourceId': audioDeviceId},
-              'mandatory': {
-                'googEchoCancellation': false,
-                'echoCancellation': false
-              }
-            },
-            'video': {
-              'deviceId': deviceID,
-              'mandatory': {
-                'minWidth': width,
-                'minHeight': height,
-              }
-            }
+          },
+          'audio': audioDeviceId == "default" 
+            ? true 
+            : {'optional': {'sourceId': audioDeviceId}}
+        });
+
+        // Add audio track if none exists
+        if (stream.getAudioTracks().isEmpty) {
+          MediaStream audioStream = await navigator.mediaDevices.getUserMedia(
+            getAudioConstraints(audioDeviceId)
+          );
+          audioStream.getAudioTracks().forEach((track) async {
+            await stream.addTrack(track);
           });
         }
-      } else if (audioDeviceId == "default") {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'deviceId': deviceID,
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'frameRate': framerate
-            }
-          }
-        });
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          'audio': {
-            'optional': {'sourceId': audioDeviceId},
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'deviceId': deviceID,
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'frameRate': framerate
-            }
-          }
-        });
-        print({
-          'audio': {
-            'optional': {'sourceId': audioDeviceId},
-            'mandatory': {
-              'googEchoCancellation': false,
-              'echoCancellation': false
-            }
-          },
-          'video': {
-            'deviceId': deviceID,
-            'mandatory': {
-              'minWidth': width,
-              'minHeight': height,
-              'frameRate': framerate
-            }
-          }
-        });
+      } catch (e) {
+        print('Error getting display media: $e');
       }
     }
-    print("Quality..");
-    print(quality);
-    print("deviceID...");
-    print(deviceID);
-    //var videoTrack = stream!.getVideoTracks().firstWhere((track) => track.kind == 'video');
-    //if (videoTrack){
-    //	WebRTC.invokeMethod('mediaStreamTrackSetZoom',<String, dynamic>{'trackId': videoTrack.id, 'zoomLevel': 1.0});
-    //}
-
-    onLocalStream?.call(stream);
-
-    final audioTracks = stream.getAudioTracks();
-    if (audioTracks.isNotEmpty) {
-      final audioTrack = audioTracks.first;
-      print("Audio Track Label: ${audioTrack.label}");
+  } else if (deviceID == "microphone") {
+    stream = await navigator.mediaDevices.getUserMedia({
+      'audio': audioDeviceId == "default"
+        ? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
+        : {
+            'mandatory': {'googEchoCancellation': false, 'echoCancellation': false},
+            'optional': [{'sourceId': audioDeviceId}]
+          },
+      'video': false
+    });
+  } else {
+    // Handle camera devices (front, rear, or specific device ID)
+    String facingMode;
+    if (deviceID == "front" || deviceID.contains("1") || deviceID == "user") {
+      facingMode = 'user';
+    } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
+      facingMode = 'environment';
+    } else {
+      facingMode = '';
     }
 
-    return stream;
+    Map<String, dynamic> constraints = {
+      'audio': audioDeviceId == "default"
+        ? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
+        : {
+            'optional': {'sourceId': audioDeviceId},
+            'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+          },
+      'video': {
+        if (facingMode.isNotEmpty) 'facingMode': facingMode,
+        if (facingMode.isEmpty) 'deviceId': deviceID,
+        'mandatory': {
+          'minWidth': width,
+          'minHeight': height,
+          'frameRate': framerate
+        }
+      }
+    };
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      print('Error getting user media: $e');
+    }
   }
+
+  onLocalStream?.call(stream);
+
+  final audioTracks = stream.getAudioTracks();
+  if (audioTracks.isNotEmpty) {
+    print("Audio Track Label: ${audioTracks.first.label}");
+  }
+
+  return stream;
+}
 
   Future<void> _createDataChannel(RTCPeerConnection pc, String label) async {
 //  RTCDataChannelInit dataChannelDict = RTCDataChannelInit()
