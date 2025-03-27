@@ -50,6 +50,20 @@ Future<void> initializeNotifications() async {
   );
 }
 
+Future<void> requestBatteryOptimizationExemption() async {
+  if (Platform.isAndroid) {
+    final status = await Permission.ignoreBatteryOptimizations.status;
+    
+    if (!status.isGranted) {
+      try {
+        await Permission.ignoreBatteryOptimizations.request();
+      } catch (e) {
+        print("Error requesting battery optimization exemption: $e");
+      }
+    }
+  }
+}
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
@@ -80,17 +94,18 @@ void main() {
 const notificationChannelId = 'vdo_ninja_foreground';
 const notificationId = 888;
 
-// Replace your existing startForegroundService function with this one:
 Future<bool> startForegroundService() async {
   final service = FlutterBackgroundService();
   
   if (Platform.isAndroid) {
-    // Create the Android notification channel first
+    // Create the Android notification channel with lower importance
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       notificationChannelId, // id
       'VDO.Ninja Service', // name
       description: 'Enables background audio/video streaming', // description
-      importance: Importance.high,
+      importance: Importance.low, // Lower importance to be less intrusive
+      enableVibration: false, // Disable vibration
+      showBadge: false, // Don't show badge on app icon
     );
 
     // Create the notification channel
@@ -105,8 +120,8 @@ Future<bool> startForegroundService() async {
       autoStart: true,
       isForegroundMode: true,
       notificationChannelId: notificationChannelId,
-      initialNotificationTitle: 'VDO.Ninja background service',
-      initialNotificationContent: 'Running in background',
+      initialNotificationTitle: 'VDO.Ninja running in background',
+      initialNotificationContent: 'Tap to return to app',
       foregroundServiceNotificationId: notificationId,
     ),
     iosConfiguration: IosConfiguration(
@@ -131,24 +146,24 @@ void onStartBackground(ServiceInstance service) {
       service.stopSelf();
     });
     
-    // Initialize the notification when service starts
+    // Initialize the notification with a better UX message
     try {
       service.setForegroundNotificationInfo(
-        title: 'VDO.Ninja is running',
-        content: 'Background service active',
+        title: 'VDO.Ninja is running in background',
+        content: 'Tap to return to the app',
       );
     } catch (e) {
       print('Error setting initial notification: $e');
     }
   }
 
-  // Use less frequent updates to reduce resource usage
-  Timer.periodic(const Duration(minutes: 5), (timer) async {
+  // Reduce update frequency to save battery
+  Timer.periodic(const Duration(minutes: 15), (timer) async {
     if (service is AndroidServiceInstance) {
       try {
         service.setForegroundNotificationInfo(
-          title: 'VDO.Ninja is running',
-          content: 'Background service active',
+          title: 'VDO.Ninja is active',
+          content: 'Tap to return to the app',
         );
       } catch (e) {
         print('Error updating notification: $e');
@@ -289,16 +304,19 @@ List<Color> colors = const [
       ),
     );
   }
-  _initData() async {
+  void _initData() async {
+	  // Existing code...
 	  
-	if (WebRTC.platformIsAndroid) {
-	   bool serviceStarted = await startForegroundService();
-	   if (!serviceStarted) {
-		 // Handle the failure appropriately
-		 print('Failed to start foreground service');
-	   }
-	 }
-	  
+	  if (WebRTC.platformIsAndroid) {
+		// Request battery optimization exemption for better performance
+		await requestBatteryOptimizationExemption();
+		
+		bool serviceStarted = await startForegroundService();
+		if (!serviceStarted) {
+		  print('Failed to start foreground service');
+		}
+	  }
+  
     _prefs = await SharedPreferences.getInstance();
 	//await _prefs.clear();
 	

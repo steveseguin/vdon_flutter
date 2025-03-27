@@ -12,6 +12,9 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:convert/convert.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+
 enum SignalingState {
   ConnectionOpen,
   ConnectionClosed,
@@ -327,6 +330,51 @@ class Signaling {
       Helper.setZoom(_localStream!.getVideoTracks()[0], zoomLevel);
     }
   }
+  
+  Future<void> handleConnectionTimeout(String sessionId, int timeoutMs) async {
+	  // Store connection start time
+	  final connectionStartTime = DateTime.now();
+	  
+	  // Create a timer to check connection status periodically
+	  Timer.periodic(Duration(seconds: 30), (timer) {
+		if (!active) {
+		  timer.cancel();
+		  return;
+		}
+		
+		// Calculate time since connection started
+		final timeElapsed = DateTime.now().difference(connectionStartTime).inMilliseconds;
+		
+		// Check if we've exceeded the timeout without establishing connection
+		if (timeElapsed > timeoutMs && _sessions[sessionId] != null) {
+		  final connectionState = _sessions[sessionId].connectionState;
+		  
+		  // If connection is not established or has failed, attempt reconnection
+		  if (connectionState == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+			  connectionState == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+			
+			print("Connection timeout detected for session $sessionId. Attempting reconnection...");
+			
+			// Clean up existing session
+			_sessions[sessionId].close();
+			_sessions.remove(sessionId);
+			_sessionID.remove(sessionId);
+			
+			// Attempt to reconnect
+			if (active) {
+			  // Delay reconnection attempt to avoid rapid reconnection loops
+			  Future.delayed(Duration(seconds: 2), () {
+				if (active) {
+				  connect();
+				}
+			  });
+			}
+			
+			timer.cancel();
+		  }
+		}
+	  });
+	}
 
   toggleTorch(torch) async {
     if (_localStream != null) {
@@ -511,255 +559,280 @@ class Signaling {
     }
   }
 
-  Future<void> connect() async {
-    if (_localStream == null || _localStream!.getTracks().isEmpty) {
-      _localStream = await createStream(true, deviceID, audioDeviceId);
-    }
-
-    active = true;
-
-    if (UUID.isEmpty && (WSSADDRESS != "wss://wss.vdo.ninja:443")) {
-      var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
-      Random _rnd = Random();
-      String getRandomString(int length) =>
-          String.fromCharCodes(Iterable.generate(
-              length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
-      UUID = getRandomString(16); // Generate UUID here
-    }
-
-    _socket = SimpleWebSocket();
-
-    _socket.onOpen = () {
-      print('onOpen');
-      onSignalingStateChange.call(SignalingState.ConnectionOpen);
-
-      var request = Map();
-      request["request"] = "seed";
-      request["streamID"] = streamID + hashcode;
-      if (!UUID.isEmpty) {
-        request["from"] = UUID;
-      }
-      _socket.send(_encoder.convert(request));
-
-      if (roomID != "") {
-        var request = Map();
-        request["request"] = "joinroom";
-        // return generateHash(roomid+session.password+session.salt+token,16).then(function(rid){
-        if (roomhashcode != "") {
-          request["roomid"] = roomhashcode;
-        } else {
-          request["roomid"] = roomID;
-        }
-
-        if (!UUID.isEmpty) {
-          request["from"] = UUID;
-        }
-        print(request);
-        _socket.send(_encoder.convert(request));
-      }
-    };
-
-    _socket.onMessage = (message) {
-      // print('Received data: ' + message);
-      onMessage(_decoder.convert(message));
-    };
-
-    _socket.onClose = (int code, String reason) {
-      print('Closed by server [$code => $reason]!');
-      onSignalingStateChange.call(SignalingState.ConnectionClosed);
-      if (active) {
-        int reconnectAttempts = 0;
-        int reconnectDelay = 1; // Initial delay in seconds
-        const int maxReconnectAttempts = 5000; // Maximum reconnection attempts
-
-        Timer.periodic(Duration(seconds: reconnectDelay), (timer) async {
-          if (reconnectAttempts < maxReconnectAttempts) {
-            print('Reconnecting attempt ${reconnectAttempts + 1}...');
-            try {
-              await _socket.connect(streamID + hashcode, WSSADDRESS, UUID);
-              timer.cancel(); // Stop reconnection attempts if successful
-            } catch (e) {
-              print('Reconnection failed: ${e.toString()}');
-              reconnectAttempts++;
-              reconnectDelay *= 2; // Exponential backoff
-              reconnectDelay =
-                  min(reconnectDelay, 60); // Cap delay at 60 seconds
-            }
-          } else {
-            print('Max reconnection attempts reached. Giving up.');
-            timer.cancel();
-          }
-        });
-      }
-    };
-
-    await _socket.connect(streamID + hashcode, WSSADDRESS, UUID);
-  }
-
-  Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
-  String width = quality ? "1920" : "1280";
-  String height = quality ? "1080" : "720";
-  String framerate = quality ? "60" : "30";
-  late MediaStream stream;
-
-  Map<String, dynamic> getAudioConstraints(String audioDeviceId) {
-    return {
-      'audio': {
-        if (audioDeviceId != "default") 'optional': {'sourceId': audioDeviceId},
-        'mandatory': {
-          'googEchoCancellation': false,
-          'echoCancellation': false,
-          'noiseSuppression': false,
-          'autoGainControl': false
-        }
-      }
-    };
-  }
-
-  if (deviceID == "screen") {
-	if (Platform.isIOS) {
-	  width = "1280";
-	  height = "720";
-	  
+	Future<void> connect() async {
 	  try {
-		// Request display media first
-		stream = await navigator.mediaDevices.getDisplayMedia({
-		  'video': {
-			'deviceId': 'broadcast',
-			'mandatory': {
-			  'width': width,
-			  'height': height,
-			  'maxWidth': width,
-			  'maxHeight': width,
-			  'frameRate': framerate
-			},
-		  },
-		});
-
-		// Create a queue of tasks to avoid race conditions
-		final futures = <Future>[];
+		// Track reconnection attempts to implement exponential backoff
+		int reconnectionAttempt = 0;
+		const int maxReconnectionAttempts = 5;
 		
-		// Add silent audio track for iOS with proper error handling
-		futures.add(() async {
+		// Function to attempt connection with retry logic
+		Future<bool> attemptConnection() async {
 		  try {
-			MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
-			if (silentStream != null && silentStream.getAudioTracks().isNotEmpty) {
-			  await stream.addTrack(silentStream.getAudioTracks().first);
+			if (_localStream == null || _localStream!.getTracks().isEmpty) {
+			  _localStream = await createStream(true, deviceID, audioDeviceId);
 			}
-		  } catch (e) {
-			print('Error adding silent audio: $e');
-		  }
-		}());
-		
-		// Add microphone audio if specified
-		if (audioDeviceId != "default") {
-		  futures.add(() async {
-			try {
-			  MediaStream micStream = await navigator.mediaDevices.getUserMedia(
-				getAudioConstraints(audioDeviceId)
-			  );
-			  if (micStream.getAudioTracks().isNotEmpty) {
-				await stream.addTrack(micStream.getAudioTracks().first);
+			
+			active = true;
+			
+			if (UUID.isEmpty && (WSSADDRESS != "wss://wss.vdo.ninja:443")) {
+			  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
+			  Random _rnd = Random();
+			  String getRandomString(int length) =>
+				  String.fromCharCodes(Iterable.generate(
+					  length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
+			  UUID = getRandomString(16);
+			}
+			
+			_socket = SimpleWebSocket();
+			
+			// Set up socket handlers with improved error handling
+			_socket.onOpen = () {
+			  print('WebSocket connection established');
+			  onSignalingStateChange.call(SignalingState.ConnectionOpen);
+			  
+			  // Reset reconnection attempts on successful connection
+			  reconnectionAttempt = 0;
+			  
+			  try {
+				var request = Map();
+				request["request"] = "seed";
+				request["streamID"] = streamID + hashcode;
+				if (!UUID.isEmpty) {
+				  request["from"] = UUID;
+				}
+				_socket.send(_encoder.convert(request));
+				
+				if (roomID != "") {
+				  var request = Map();
+				  request["request"] = "joinroom";
+				  if (roomhashcode != "") {
+					request["roomid"] = roomhashcode;
+				  } else {
+					request["roomid"] = roomID;
+				  }
+				  
+				  if (!UUID.isEmpty) {
+					request["from"] = UUID;
+				  }
+				  _socket.send(_encoder.convert(request));
+				}
+			  } catch (e) {
+				print('Error sending initial requests: $e');
 			  }
-			} catch (e) {
-			  print('Error adding microphone audio: $e');
-			}
-		  }());
+			};
+			
+			_socket.onMessage = (message) {
+			  try {
+				onMessage(_decoder.convert(message));
+			  } catch (e) {
+				print('Error processing message: $e');
+			  }
+			};
+			
+			_socket.onClose = (int code, String reason) {
+			  print('WebSocket connection closed [$code => $reason]');
+			  onSignalingStateChange.call(SignalingState.ConnectionClosed);
+			  
+			  if (active) {
+				// Calculate exponential backoff delay
+				int reconnectDelay = 1000 * pow(2, reconnectionAttempt).toInt();
+				reconnectDelay = min(reconnectDelay, 30000); // Cap at 30 seconds
+				
+				if (reconnectionAttempt < maxReconnectionAttempts) {
+				  print('Attempting reconnection #${reconnectionAttempt + 1} in ${reconnectDelay / 1000} seconds');
+				  reconnectionAttempt++;
+				  
+				  Future.delayed(Duration(milliseconds: reconnectDelay), () {
+					if (active) {
+					  attemptConnection();
+					}
+				  });
+				} else {
+				  print('Max reconnection attempts reached. Giving up.');
+				  // Notify application of permanent connection failure
+				  onSignalingStateChange.call(SignalingState.ConnectionError);
+				}
+			  }
+			};
+			
+			await _socket.connect(streamID + hashcode, WSSADDRESS, UUID);
+			return true;
+		  } catch (e) {
+			print('Connection attempt failed: $e');
+			return false;
+		  }
 		}
 		
-		// Wait for all track additions to complete
-		await Future.wait(futures);
+		// Initial connection attempt
+		await attemptConnection();
+		
+		// Set up a connection timeout detector
+		handleConnectionTimeout(UUID, 30000); // 30 second timeout
 		
 	  } catch (e) {
-		print('Error getting display media: $e');
-		rethrow;
+		print('Error in connect method: $e');
+		active = false;
+		onSignalingStateChange.call(SignalingState.ConnectionError);
 	  }
-    } else {
-      try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-            'deviceId': 'broadcast',
-            'mandatory': {
-              'width': width,
-              'height': height,
-              'maxWidth': width,
-              'maxHeight': width,
-              'frameRate': framerate
-            },
-          },
-          'audio': audioDeviceId == "default" 
-            ? true 
-            : {'optional': {'sourceId': audioDeviceId}}
-        });
+	}
 
-        // Add audio track if none exists
-        if (stream.getAudioTracks().isEmpty) {
-          MediaStream audioStream = await navigator.mediaDevices.getUserMedia(
-            getAudioConstraints(audioDeviceId)
-          );
-          audioStream.getAudioTracks().forEach((track) async {
-            await stream.addTrack(track);
-          });
-        }
-      } catch (e) {
-        print('Error getting display media: $e');
-      }
-    }
-  } else if (deviceID == "microphone") {
-    stream = await navigator.mediaDevices.getUserMedia({
-      'audio': audioDeviceId == "default"
-        ? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
-        : {
-            'mandatory': {'googEchoCancellation': false, 'echoCancellation': false},
-            'optional': [{'sourceId': audioDeviceId}]
-          },
-      'video': false
-    });
-  } else {
-    // Handle camera devices (front, rear, or specific device ID)
-    String facingMode;
-    if (deviceID == "front" || deviceID.contains("1") || deviceID == "user") {
-      facingMode = 'user';
-    } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
-      facingMode = 'environment';
-    } else {
-      facingMode = '';
-    }
-
-    Map<String, dynamic> constraints = {
-      'audio': audioDeviceId == "default"
-        ? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
-        : {
-            'optional': {'sourceId': audioDeviceId},
-            'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
-          },
-      'video': {
-        if (facingMode.isNotEmpty) 'facingMode': facingMode,
-        if (facingMode.isEmpty) 'deviceId': deviceID,
-        'mandatory': {
-          'minWidth': width,
-          'minHeight': height,
-          'frameRate': framerate
-        }
-      }
-    };
-
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (e) {
-      print('Error getting user media: $e');
-    }
-  }
-
-  onLocalStream?.call(stream);
-
-  final audioTracks = stream.getAudioTracks();
-  if (audioTracks.isNotEmpty) {
-    print("Audio Track Label: ${audioTracks.first.label}");
-  }
-
-  return stream;
-}
+	Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
+	  try {
+		String width = quality ? "1920" : "1280";
+		String height = quality ? "1080" : "720";
+		String framerate = quality ? "60" : "30";
+		late MediaStream stream;
+		
+		// Improved error handling for media access
+		Future<MediaStream?> safeMediaAccess(Future<MediaStream> Function() accessMethod, String accessType) async {
+		  try {
+			return await accessMethod();
+		  } catch (e) {
+			print('Error accessing $accessType: $e');
+			
+			// Check if the error is permission-related
+			if (e.toString().contains('permission') || 
+				e.toString().contains('denied') || 
+				e.toString().contains('access')) {
+			  print('Possible permission issue detected. Requesting permissions...');
+			  
+			  // Try requesting permissions explicitly
+			  if (accessType.contains('camera')) {
+				await Permission.camera.request();
+			  }
+			  if (accessType.contains('microphone')) {
+				await Permission.microphone.request();
+			  }
+			  
+			  // Try one more time after requesting permissions
+			  try {
+				return await accessMethod();
+			  } catch (retryError) {
+				print('Still failed after permission request: $retryError');
+				return null;
+			  }
+			}
+			return null;
+		  }
+		}
+		
+		Map<String, dynamic> getAudioConstraints(String audioDeviceId) {
+		  return {
+			'audio': {
+			  if (audioDeviceId != "default") 'optional': {'sourceId': audioDeviceId},
+			  'mandatory': {
+				'googEchoCancellation': false,
+				'echoCancellation': false,
+				'noiseSuppression': false,
+				'autoGainControl': false
+			  }
+			}
+		  };
+		}
+		
+		if (deviceID == "screen") {
+		  // Screen sharing
+		  MediaStream? displayStream = await safeMediaAccess(() => 
+			navigator.mediaDevices.getDisplayMedia({
+			  'video': {
+				'deviceId': 'broadcast',
+				'mandatory': {
+				  'width': width,
+				  'height': height,
+				  'maxWidth': width,
+				  'maxHeight': width,
+				  'frameRate': framerate
+				},
+			  },
+			}), 'screen');
+		  
+		  if (displayStream == null) {
+			throw Exception('Failed to access screen sharing');
+		  }
+		  
+		  stream = displayStream;
+		  
+		  // Add audio track separately with better error handling
+		  try {
+			MediaStream? audioStream = await safeMediaAccess(() => 
+			  navigator.mediaDevices.getUserMedia(getAudioConstraints(audioDeviceId)),
+			  'microphone');
+			  
+			if (audioStream != null && audioStream.getAudioTracks().isNotEmpty) {
+			  await stream.addTrack(audioStream.getAudioTracks()[0]);
+			}
+		  } catch (e) {
+			print('Error adding audio to screen share: $e');
+			// Continue without audio track if it fails
+		  }
+		  
+		} else if (deviceID == "microphone") {
+		  // Audio-only mode
+		  MediaStream? audioStream = await safeMediaAccess(() => 
+			navigator.mediaDevices.getUserMedia({
+			  'audio': audioDeviceId == "default"
+				? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
+				: {
+					'mandatory': {'googEchoCancellation': false, 'echoCancellation': false},
+					'optional': [{'sourceId': audioDeviceId}]
+				  },
+			  'video': false
+			}), 'microphone');
+			
+		  if (audioStream == null) {
+			throw Exception('Failed to access microphone');
+		  }
+		  
+		  stream = audioStream;
+		  
+		} else {
+		  // Camera access
+		  String facingMode;
+		  if (deviceID == "front" || deviceID.contains("1") || deviceID == "user") {
+			facingMode = 'user';
+		  } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
+			facingMode = 'environment';
+		  } else {
+			facingMode = '';
+		  }
+		  
+		  Map<String, dynamic> constraints = {
+			'audio': audioDeviceId == "default"
+			  ? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
+			  : {
+				  'optional': {'sourceId': audioDeviceId},
+				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
+				},
+			'video': {
+			  if (facingMode.isNotEmpty) 'facingMode': facingMode,
+			  if (facingMode.isEmpty) 'deviceId': deviceID,
+			  'mandatory': {
+				'minWidth': width,
+				'minHeight': height,
+				'frameRate': framerate
+			  }
+			}
+		  };
+		  
+		  MediaStream? cameraStream = await safeMediaAccess(() => 
+			navigator.mediaDevices.getUserMedia(constraints),
+			'camera and microphone');
+			
+		  if (cameraStream == null) {
+			throw Exception('Failed to access camera and microphone');
+		  }
+		  
+		  stream = cameraStream;
+		}
+		
+		onLocalStream?.call(stream);
+		
+		return stream;
+	  } catch (e) {
+		print('Fatal error in createStream: $e');
+		rethrow; // Let the caller handle this fatal error
+	  }
+	}
 
   Future<void> _createDataChannel(RTCPeerConnection pc, String label) async {
 //  RTCDataChannelInit dataChannelDict = RTCDataChannelInit()
