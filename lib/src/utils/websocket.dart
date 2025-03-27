@@ -36,11 +36,21 @@ class SimpleWebSocket {
 			_socket.add(_encoder.convert(request));
 			
             onOpen.call();
-            _socket.listen((data) {
-                onMessage.call(data);
-            }, onDone: () {
-                onClose.call(_socket.closeCode, _socket.closeReason);
-            });
+			_socket.listen((data) {
+				onMessage.call(data);
+			}, onDone: () {
+				// Properly handle iOS background mode transitions
+				if (Platform.isIOS) {
+				  print('WebSocket closed, handling iOS background transition');
+				  // Add a small delay to avoid immediate reconnection attempts
+				  // that might occur during iOS app state transitions
+				  Future.delayed(Duration(milliseconds: 500), () {
+					onClose.call(_socket.closeCode, _socket.closeReason);
+				  });
+				} else {
+				  onClose.call(_socket.closeCode, _socket.closeReason);
+				}
+			});
         } on SocketException catch (e) {
 			// Handle socket-related errors, e.g., network issues
 			print('WebSocket connection failed (SocketException): ${e.toString()}');

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'dart:core';
 import 'signaling.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:share/share.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/services.dart';

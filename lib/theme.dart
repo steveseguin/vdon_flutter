@@ -11,10 +11,10 @@ Color ninjaAccentColor = Color(0xFF3498DB);  // Light blue for accents
 var theme = ThemeData(
   primaryColor: ninjaDarkBlue,
   scaffoldBackgroundColor: ninjaDarkBlue,
-  cardTheme: CardTheme(
-    color: ninjaCardColor,
-    elevation: 2,
-  ),
+	cardTheme: CardThemeData(
+	  color: ninjaCardColor,
+	  elevation: 2,
+	),
   canvasColor: ninjaDarkerBlue,
   textTheme: TextTheme(
     displayLarge: TextStyle(fontSize: 25.0, fontWeight: FontWeight.normal, color: Colors.white),
@@ -43,18 +43,18 @@ var theme = ThemeData(
     size: 24,
   ),
   // Add dialog theme
-  dialogTheme: DialogTheme(
-    backgroundColor: ninjaDialogColor,
-    elevation: 8,
-    titleTextStyle: TextStyle(
-      color: Colors.white,
-      fontSize: 20,
-      fontWeight: FontWeight.bold,
-    ),
-    contentTextStyle: TextStyle(
-      color: Colors.white,
-    ),
-  ),
+	dialogTheme: DialogThemeData(
+	  backgroundColor: ninjaDialogColor,
+	  elevation: 8,
+	  titleTextStyle: TextStyle(
+		color: Colors.white,
+		fontSize: 20,
+		fontWeight: FontWeight.bold,
+	  ),
+	  contentTextStyle: TextStyle(
+		color: Colors.white,
+	  ),
+	),
   // Add input decoration theme
   inputDecorationTheme: InputDecorationTheme(
     labelStyle: TextStyle(color: Colors.white70),

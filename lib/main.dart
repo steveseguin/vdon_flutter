@@ -10,15 +10,20 @@ import 'dart:math';
 import 'src/call_sample/call_sample.dart';
 import 'src/route_item.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:wakelock/wakelock.dart';
-import 'package:flutter_background/flutter_background.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'dart:async'; 
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =  FlutterLocalNotificationsPlugin();
+	
 Future<bool> isIosVersionSupported() async {
   DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
   IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
@@ -32,55 +37,124 @@ Future<bool> isIosVersionSupported() async {
   return true;
 }
 
+Future<void> initializeNotifications() async {
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+      
+  const InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
+  
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+  );
+}
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    
+    // Initialize notifications first
+    await initializeNotifications();
 
-  if (WebRTC.platformIsDesktop) {
-    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
-  } 
-  
-  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent, // Make the status bar transparent
-    statusBarIconBrightness: Brightness.light, // Light icons for the status bar
-    systemNavigationBarColor: Colors.black, // Navigation bar color
-    systemNavigationBarIconBrightness: Brightness.light, // Light icons for the navigation bar
-  ));
+    if (WebRTC.platformIsDesktop) {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+    } 
+    
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.black,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  runApp(MyApp());
+    runApp(MyApp());
   }, (error, stackTrace) {
     print('Caught error: $error');
     print(stackTrace);
   });
 }
 
+const notificationChannelId = 'vdo_ninja_foreground';
+const notificationId = 888;
+
+// Replace your existing startForegroundService function with this one:
 Future<bool> startForegroundService() async {
-    final androidConfig = FlutterBackgroundAndroidConfig(
-        notificationTitle: 'VDO.Ninja background service',
-        notificationText: 'VDO.Ninja background service',
-        notificationImportance: AndroidNotificationImportance.Default,
-        notificationIcon: AndroidResource(
-            name: 'background_icon',
-            defType: 'drawable',
-        )
+  final service = FlutterBackgroundService();
+  
+  if (Platform.isAndroid) {
+    // Create the Android notification channel first
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      notificationChannelId, // id
+      'VDO.Ninja Service', // name
+      description: 'Enables background audio/video streaming', // description
+      importance: Importance.high,
     );
 
+    // Create the notification channel
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+  }
+  
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onStartBackground,
+      autoStart: true,
+      isForegroundMode: true,
+      notificationChannelId: notificationChannelId,
+      initialNotificationTitle: 'VDO.Ninja background service',
+      initialNotificationContent: 'Running in background',
+      foregroundServiceNotificationId: notificationId,
+    ),
+    iosConfiguration: IosConfiguration(
+      autoStart: true,
+      onForeground: onStartBackground,
+      onBackground: onIosBackground,
+    ),
+  );
+
+  return await service.isRunning();
+}
+
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  return true;
+}
+
+@pragma('vm:entry-point')
+void onStartBackground(ServiceInstance service) {
+  if (service is AndroidServiceInstance) {
+    service.on('stopService').listen((event) {
+      service.stopSelf();
+    });
+    
+    // Initialize the notification when service starts
     try {
-        await FlutterBackground.initialize(androidConfig: androidConfig);
-		await FlutterBackground.enableBackgroundExecution();
-        return true;
+      service.setForegroundNotificationInfo(
+        title: 'VDO.Ninja is running',
+        content: 'Background service active',
+      );
     } catch (e) {
-		try {
-			await FlutterBackground.initialize(androidConfig: androidConfig);
-			await FlutterBackground.enableBackgroundExecution();
-			return true;
-		} catch (e) {
-			print('Error initializing FlutterBackground: $e');
-		}
-        return false;
+      print('Error setting initial notification: $e');
     }
+  }
+
+  // Use less frequent updates to reduce resource usage
+  Timer.periodic(const Duration(minutes: 5), (timer) async {
+    if (service is AndroidServiceInstance) {
+      try {
+        service.setForegroundNotificationInfo(
+          title: 'VDO.Ninja is running',
+          content: 'Background service active',
+        );
+      } catch (e) {
+        print('Error updating notification: $e');
+      }
+    }
+  });
 }
 
 class MyApp extends StatefulWidget {
@@ -264,7 +338,7 @@ List<Color> colors = const [
     streamID = streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
     roomID = roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
     setState(() {
-      Wakelock.enable();
+      WakelockPlus.enable();
     });
 	
     

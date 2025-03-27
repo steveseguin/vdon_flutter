@@ -11,9 +11,7 @@ import 'package:tuple/tuple.dart';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
-import 'package:flutter_background/flutter_background.dart';
 import 'package:convert/convert.dart';
-
 enum SignalingState {
   ConnectionOpen,
   ConnectionClosed,
@@ -78,10 +76,8 @@ class IosSilentAudioPlayer {
       
       final audioTrack = _stream?.getAudioTracks().first;
       if (audioTrack != null) {
-        // Instead of setting volume, we enable/disable the track
         audioTrack.enabled = true;
         
-        // Set track settings to minimize audio processing
         await audioTrack.applyConstraints({
           'autoGainControl': false,
           'noiseSuppression': false,
@@ -600,44 +596,11 @@ class Signaling {
     await _socket.connect(streamID + hashcode, WSSADDRESS, UUID);
   }
 
-  Future<bool> startForegroundService() async {
-    final androidConfig = FlutterBackgroundAndroidConfig(
-        notificationTitle: 'VDO.Ninja background service',
-        notificationText: 'VDO.Ninja background service',
-        notificationImportance: AndroidNotificationImportance.Default,
-        notificationIcon: AndroidResource(
-          name: 'background_icon',
-          defType: 'drawable',
-        ));
-
-    try {
-      await FlutterBackground.initialize(androidConfig: androidConfig);
-      await FlutterBackground.enableBackgroundExecution();
-      return true;
-    } catch (e) {
-      try {
-        await FlutterBackground.initialize(androidConfig: androidConfig);
-        await FlutterBackground.enableBackgroundExecution();
-        return true;
-      } catch (e) {
-        print('Error initializing FlutterBackground: $e');
-      }
-      return false;
-    }
-  }
-
   Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
   String width = quality ? "1920" : "1280";
   String height = quality ? "1080" : "720";
   String framerate = quality ? "60" : "30";
   late MediaStream stream;
-
-  if (WebRTC.platformIsAndroid) {
-    bool serviceStarted = await startForegroundService();
-    if (!serviceStarted) {
-      print('Failed to start foreground service');
-    }
-  }
 
   Map<String, dynamic> getAudioConstraints(String audioDeviceId) {
     return {
@@ -654,44 +617,63 @@ class Signaling {
   }
 
   if (deviceID == "screen") {
-    if (Platform.isIOS) {
-      width = "1280";
-      height = "720";
-      
-      try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-            'deviceId': 'broadcast',
-            'mandatory': {
-              'width': width,
-              'height': height,
-              'maxWidth': width,
-              'maxHeight': width,
-              'frameRate': framerate
-            },
-          },
-        });
+	if (Platform.isIOS) {
+	  width = "1280";
+	  height = "720";
+	  
+	  try {
+		// Request display media first
+		stream = await navigator.mediaDevices.getDisplayMedia({
+		  'video': {
+			'deviceId': 'broadcast',
+			'mandatory': {
+			  'width': width,
+			  'height': height,
+			  'maxWidth': width,
+			  'maxHeight': width,
+			  'frameRate': framerate
+			},
+		  },
+		});
 
-        // Add silent audio track for iOS
-        MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
-        if (silentStream != null) {
-          silentStream.getAudioTracks().forEach((track) async {
-            await stream.addTrack(track);
-          });
-        }
-
-        // Add microphone audio if specified
-        if (audioDeviceId != "default") {
-          MediaStream micStream = await navigator.mediaDevices.getUserMedia(
-            getAudioConstraints(audioDeviceId)
-          );
-          micStream.getAudioTracks().forEach((track) async {
-            await stream.addTrack(track);
-          });
-        }
-      } catch (e) {
-        print('Error getting display media: $e');
-      }
+		// Create a queue of tasks to avoid race conditions
+		final futures = <Future>[];
+		
+		// Add silent audio track for iOS with proper error handling
+		futures.add(() async {
+		  try {
+			MediaStream? silentStream = await _iosSilentAudio.createSilentAudioStream();
+			if (silentStream != null && silentStream.getAudioTracks().isNotEmpty) {
+			  await stream.addTrack(silentStream.getAudioTracks().first);
+			}
+		  } catch (e) {
+			print('Error adding silent audio: $e');
+		  }
+		}());
+		
+		// Add microphone audio if specified
+		if (audioDeviceId != "default") {
+		  futures.add(() async {
+			try {
+			  MediaStream micStream = await navigator.mediaDevices.getUserMedia(
+				getAudioConstraints(audioDeviceId)
+			  );
+			  if (micStream.getAudioTracks().isNotEmpty) {
+				await stream.addTrack(micStream.getAudioTracks().first);
+			  }
+			} catch (e) {
+			  print('Error adding microphone audio: $e');
+			}
+		  }());
+		}
+		
+		// Wait for all track additions to complete
+		await Future.wait(futures);
+		
+	  } catch (e) {
+		print('Error getting display media: $e');
+		rethrow;
+	  }
     } else {
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
@@ -854,31 +836,51 @@ class Signaling {
   }
 
   Future<void> _cleanSessions() async {
-    active = false;
-    
-      if (Platform.isIOS) {
-        _iosSilentAudio.dispose();
-    }
-    if (_localStream != null) {
-      // Add null check
-      _localStream!.getTracks().forEach((element) async {
-        await element.stop();
-      });
-      await _localStream!.dispose();
-    }
+	  active = false;
+	  
+	  // Ensure iOS silent audio is properly disposed
+	  if (Platform.isIOS) {
+		_iosSilentAudio.dispose();
+	  }
+	  
+	  // Add a try-catch to prevent crashes during cleanup
+	  try {
+		if (_localStream != null) {
+		  final tracks = _localStream!.getTracks();
+		  for (var track in tracks) {
+			try {
+			  await track.stop();
+			} catch (e) {
+			  print('Error stopping track: $e');
+			}
+		  }
+		  await _localStream!.dispose();
+		}
 
-    _sessions.forEach((key, sess) async {
-      var request = Map();
-      request["UUID"] = key;
-      request["bye"] = true;
-      if (!UUID.isEmpty) {
-        request["from"] = UUID;
-      }
-      await _socket.send(_encoder.convert(request));
-      await sess.close();
-    });
+		// Close all sessions safely
+		for (var entry in _sessions.entries) {
+		  try {
+			var request = Map();
+			request["UUID"] = entry.key;
+			request["bye"] = true;
+			if (!UUID.isEmpty) {
+			  request["from"] = UUID;
+			}
+			await _socket.send(_encoder.convert(request));
+			await entry.value.close();
+		  } catch (e) {
+			print('Error closing session: $e');
+		  }
+		}
 
-    // Close the websocket connection so the viewer doesn't auto-reconnect.
-    await _socket.close();
-  }
+		// Close the websocket connection safely
+		try {
+		  await _socket.close();
+		} catch (e) {
+		  print('Error closing socket: $e');
+		}
+	  } catch (e) {
+		print('Error in _cleanSessions: $e');
+	  }
+	}
 }

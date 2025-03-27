@@ -64,7 +64,9 @@
     <application
         android:label="VDO.Ninja"
         android:icon="@mipmap/ic_launcher">
-		
+		<meta-data
+			android:name="com.dexterous.flutterlocalnotifications.default_notification_icon"
+			android:resource="@mipmap/ic_launcher" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
@@ -85,7 +87,11 @@
             </intent-filter>
         </activity>
 		
-		<service android:name="de.julianassmann.flutter_background.IsolateHolderService" tools:replace="android:foregroundServiceType" android:exported="true" android:enabled="true" android:foregroundServiceType="camera|microphone|mediaProjection"/>
+		<service
+			android:name="id.flutter.flutter_background_service.BackgroundService"
+			android:foregroundServiceType="camera|microphone|mediaProjection"
+			tools:replace="android:exported"
+			android:exported="false"/>
 		
     </application>
 </manifest>

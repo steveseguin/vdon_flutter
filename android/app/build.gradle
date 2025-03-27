@@ -19,7 +19,7 @@ def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
 if (flutterVersionCode == null) { flutterVersionCode = 1 }
 
 def flutterTargetSdkVersion = localProperties.getProperty('flutter.targetSdkVersion')
-if (flutterTargetSdkVersion == null) { flutterTargetSdkVersion = '34' }
+if (flutterTargetSdkVersion == null) { flutterTargetSdkVersion = '35' }
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
@@ -28,21 +28,22 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    compileSdkVersion flutterTargetSdkVersion.toInteger()
-
-    defaultConfig {
-        applicationId "flutter.vdo.ninja"
-        minSdkVersion 21
-        targetSdkVersion flutterTargetSdkVersion.toInteger()
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
-        ndk {
-            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
-        }
-    }
+	compileSdkVersion 35
+	
+	defaultConfig {
+		applicationId "flutter.vdo.ninja"
+		minSdkVersion 21
+		targetSdkVersion 35
+		versionCode flutterVersionCode.toInteger()
+		versionName flutterVersionName
+		testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+		ndk {
+			abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+		}
+	}
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
@@ -90,7 +91,8 @@ flutter {
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'com.android.support.test:runner:1.0.2'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
 }
