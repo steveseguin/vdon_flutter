@@ -10,6 +10,7 @@
 .buildlog/
 .history
 .svn/
+/android/app/.cxx/
 
 # IntelliJ related
 *.iml
