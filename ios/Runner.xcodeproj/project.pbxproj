@@ -450,20 +450,28 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources.sh",
+				"${PODS_CONFIGURATION_BUILD_DIR}/ReachabilitySwift/ReachabilitySwift.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/device_info_plus/device_info_plus_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/flutter_local_notifications/flutter_local_notifications_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/package_info_plus/package_info_plus_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/path_provider_foundation/path_provider_foundation_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/permission_handler_apple/permission_handler_apple_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/shared_preferences_foundation/shared_preferences_foundation_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/url_launcher_ios/url_launcher_ios_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/wakelock_plus/wakelock_plus_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/webview_flutter_wkwebview/webview_flutter_wkwebview_privacy.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ReachabilitySwift.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/device_info_plus_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/flutter_local_notifications_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/package_info_plus_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/path_provider_foundation_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/permission_handler_apple_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/shared_preferences_foundation_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/url_launcher_ios_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/wakelock_plus_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/webview_flutter_wkwebview_privacy.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -652,14 +660,14 @@
 		};
 		97C147061CF9000F007C117D /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.32;
+				CURRENT_PROJECT_VERSION = 2.0.40;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_BITCODE = NO;
@@ -678,7 +686,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Flutter",
 				);
-				MARKETING_VERSION = 2.0.32;
+				MARKETING_VERSION = 2.0.40;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -695,7 +703,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.32;
+				CURRENT_PROJECT_VERSION = 2.0.40;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_BITCODE = NO;
@@ -714,7 +722,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Flutter",
 				);
-				MARKETING_VERSION = 2.0.32;
+				MARKETING_VERSION = 2.0.40;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -733,7 +741,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.32;
+				CURRENT_PROJECT_VERSION = 2.0.40;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -748,7 +756,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.32;
+				MARKETING_VERSION = 2.0.40;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
@@ -773,7 +781,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.32;
+				CURRENT_PROJECT_VERSION = 2.0.40;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -787,7 +795,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.32;
+				MARKETING_VERSION = 2.0.40;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -811,7 +819,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.32;
+				CURRENT_PROJECT_VERSION = 2.0.40;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -826,7 +834,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.32;
+				MARKETING_VERSION = 2.0.40;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
@@ -851,7 +859,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.32;
+				CURRENT_PROJECT_VERSION = 2.0.40;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -865,7 +873,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.32;
+				MARKETING_VERSION = 2.0.40;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
