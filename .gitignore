@@ -10,8 +10,8 @@
 .buildlog/
 .history
 .svn/
-/android/app/.cxx/
-
+./android/app/.cxx/
+./ios/build/
 # IntelliJ related
 *.iml
 *.ipr
@@ -40,7 +40,7 @@
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
-
+**/android/app/.cxx/
 # iOS/XCode related
 **/ios/**/*.mode1v3
 **/ios/**/*.mode2v3
@@ -57,6 +57,7 @@
 **/ios/**/.symlinks/
 **/ios/**/profile
 **/ios/**/xcuserdata
+**/ios/build/
 **/ios/.generated/
 **/ios/Flutter/App.framework
 **/ios/Flutter/Flutter.framework
