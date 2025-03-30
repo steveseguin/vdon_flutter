@@ -182,6 +182,7 @@ class MyApp extends StatefulWidget {
   @override
   _MyAppState createState() => new _MyAppState();
 }
+
 String streamID = "";
 String roomID = "";
 String password = "";
@@ -198,11 +199,12 @@ enum DialogDemoAction {
   cancel,
   connect,
 }
-class _MyAppState extends State < MyApp > {
-  List < RouteItem > items = [];
+
+class _MyAppState extends State<MyApp> {
+  List<RouteItem> items = [];
   late SharedPreferences _prefs;
   var _deviceID = "screen";
-List<Color> colors = const [
+  List<Color> colors = const [
     Color(0xFFA53E97),
     Color(0xFF645098),
     Color(0xFF33517E),
@@ -223,13 +225,15 @@ List<Color> colors = const [
     Color(0xFF335173),
     Color(0xFF335174),
     Color(0xFF335175)
-];
+  ];
+  
   @override
   initState() {
     super.initState();
     _initData();
     _initItems();
   }
+  
   _buildRow(context, item, index) {
     return Card(
       margin: EdgeInsets.only(top: 20, left: 20, right: 20),
@@ -253,6 +257,7 @@ List<Color> colors = const [
       ),
     );
   }
+  
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -262,7 +267,7 @@ List<Color> colors = const [
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           title: Text('VDO.Ninja'),
-		  backgroundColor: Colors.blue,
+          backgroundColor: Colors.blue,
         ),
         body: Container(
           child: Stack(
@@ -293,15 +298,50 @@ List<Color> colors = const [
                           itemBuilder: (context, i) {
                             return _buildRow(context, items[i], i);
                           }),
-                    Align(
-                      alignment: FractionalOffset.bottomCenter,
-                      child: TextButton.icon(
-                        icon: Icon(Icons.help_center),
-                        style: Theme.of(context).elevatedButtonTheme.style,
-                        onPressed: () => {
-                          _openDiscord()
-                        },
-                        label: Text("Need help? Join our Discord.")),
+                    Container(
+                      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                      padding: EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.blueGrey.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1)
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            "Need help or have questions?",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            "Join our friendly community on Discord for support and tips.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          SizedBox(height: 12),
+                          TextButton.icon(
+                            icon: Icon(Icons.discord, color: Colors.white),
+                            style: TextButton.styleFrom(
+                              backgroundColor: Color(0xFF5865F2),
+                              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () => {
+                              _openDiscord()
+                            },
+                            label: Text(
+                              "Join Discord Community",
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            )
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 )),
@@ -310,87 +350,85 @@ List<Color> colors = const [
       ),
     );
   }
-  void _initData() async {
-	  // Existing code...
-	  
-	  if (WebRTC.platformIsAndroid) {
-		// Request battery optimization exemption for better performance
-		await requestBatteryOptimizationExemption();
-		
-		bool serviceStarted = await startForegroundService();
-		if (!serviceStarted) {
-		  print('Failed to start foreground service');
-		}
-	  }
   
+  void _initData() async {
+    if (WebRTC.platformIsAndroid) {
+      // Request battery optimization exemption for better performance
+      await requestBatteryOptimizationExemption();
+      
+      bool serviceStarted = await startForegroundService();
+      if (!serviceStarted) {
+        print('Failed to start foreground service');
+      }
+    }
+    
     _prefs = await SharedPreferences.getInstance();
-	//await _prefs.clear();
-	
+    //await _prefs.clear();
+    
     streamID = _prefs.getString('streamID') ?? "";
     roomID = _prefs.getString('roomID') ?? "";
     password = _prefs.getString('password') ?? "";
-	
+    
     WSSADDRESS = _prefs.getString('WSSADDRESS') ?? WSSADDRESS;
     TURNSERVER = _prefs.getString('TURNSERVER') ?? TURNSERVER;
-	// _selectedMicrophoneId = _prefs.getString('audioDeviceId') ?? _selectedMicrophoneId;
-	
+    // _selectedMicrophoneId = _prefs.getString('audioDeviceId') ?? _selectedMicrophoneId;
+    
     try {
       quality = _prefs.getBool('resolution') ?? false;
     } catch (e) {}
-	
+    
     try {
       landscape = _prefs.getBool('landscape') ?? false;
     } catch (e) {}
-	
+    
     if (streamID == "") {
-		var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
-		Random _rnd = Random();
-		String getRandomString(int length) =>
-		String.fromCharCodes(Iterable.generate(
-		  length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
-		streamID = getRandomString(8);
-		_prefs.setString('streamID', streamID);
+      var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
+      Random _rnd = Random();
+      String getRandomString(int length) =>
+      String.fromCharCodes(Iterable.generate(
+        length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
+      streamID = getRandomString(8);
+      _prefs.setString('streamID', streamID);
 
-		if (_prefs.getString('password') == null){
-		  _prefs.setString('password', password);
-		}
-    } else if (_prefs.getString('password') == null){
-		password = "0";
-		_prefs.setString('password', password);
-	}
-	
+      if (_prefs.getString('password') == null) {
+        _prefs.setString('password', password);
+      }
+    } else if (_prefs.getString('password') == null) {
+      password = "0";
+      _prefs.setString('password', password);
+    }
+    
     streamID = streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
     roomID = roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+    
     setState(() {
       WakelockPlus.enable();
     });
-	
-    
   }
 
   void showDemoDialog<T>({
     required BuildContext context,
     required Widget child
   }) {
-    showDialog < T > (
+    showDialog<T>(
       context: context,
       builder: (BuildContext context) => child,
-    ).then < void > ((T ? value) {
+    ).then<void>((T? value) {
       if (value == DialogDemoAction.connect) {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => CallSample(
-              key: new GlobalKey < ScaffoldState > (),
+              key: new GlobalKey<ScaffoldState>(),
               streamID: streamID,
               deviceID: _deviceID,
-			  audioDeviceId: _selectedMicrophoneId,
+              audioDeviceId: _selectedMicrophoneId,
               roomID: roomID,
               quality: quality,
               landscape: landscape,
               WSSADDRESS: WSSADDRESS,
               TURNSERVER: TURNSERVER,
-			  password: (password=="") ? "someEncryptionKey123" : password,
+              password: (password=="") ? "someEncryptionKey123" : password,
               muted: false,
               preview: true,
               mirrored: true
@@ -398,254 +436,253 @@ List<Color> colors = const [
       }
     });
   }
-_showAddressDialog(context) {
-  showDemoDialog<DialogDemoAction>(
-    context: context,
-    child: AlertDialog(
-      title: const Text('Publishing settings'),
-      scrollable: true,
-      backgroundColor: ninjaDialogColor,  // Use the dialog color instead of card color
-      surfaceTintColor: Colors.transparent,
-          insetPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          contentPadding: EdgeInsets.only(left: 10, right: 10, bottom: MediaQuery.of(context).viewInsets.bottom),
-          content: SingleChildScrollView(
-            child: new Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-                    child: TextField(
-                    style: TextStyle(color: Colors.white),                      onChanged: (String text) {
-                        setState(() {
-                          streamID = text;
-                          _prefs.setString('streamID', streamID);
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: streamID,
-                        labelText: 'Stream ID (auto-generated if empty)'
-                      ),
-                      textAlign: TextAlign.center
+  
+  _showAddressDialog(context) {
+    showDemoDialog<DialogDemoAction>(
+      context: context,
+      child: AlertDialog(
+        title: const Text('Publishing settings'),
+        scrollable: true,
+        backgroundColor: ninjaDialogColor,  // Use the dialog color instead of card color
+        surfaceTintColor: Colors.transparent,
+        insetPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        contentPadding: EdgeInsets.only(left: 10, right: 10, bottom: MediaQuery.of(context).viewInsets.bottom),
+        content: SingleChildScrollView(
+          child: new Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+                  child: TextField(
+                  style: TextStyle(color: Colors.white),
+                    onChanged: (String text) {
+                      setState(() {
+                        streamID = text;
+                        _prefs.setString('streamID', streamID);
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: streamID,
+                      labelText: 'Stream ID (auto-generated if empty)'
                     ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 55, 0, 0),
-                    child: TextField(
-                    style: TextStyle(color: Colors.white),                      controller: TextEditingController()..text = roomID ?? "",
-                      onChanged: (String text) {
-                        setState(() {
-                          roomID = text;
-                          _prefs.setString('roomID', roomID);
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: roomID ?? "Room name",
-                        labelText: 'Room name (optional)',
-                      ),
-                      textAlign: TextAlign.center,
+                    textAlign: TextAlign.center
+                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 55, 0, 0),
+                  child: TextField(
+                  style: TextStyle(color: Colors.white),
+                    controller: TextEditingController()..text = roomID ?? "",
+                    onChanged: (String text) {
+                      setState(() {
+                        roomID = text;
+                        _prefs.setString('roomID', roomID);
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: roomID ?? "Room name",
+                      labelText: 'Room name (optional)',
                     ),
-                ),
-				Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 110, 0, 0),
-                    child: TextField(
-                    style: TextStyle(color: Colors.white),                      controller: TextEditingController()..text = password ?? "",
-                      onChanged: (String textpass) {
-                        setState(() {
-                          password = textpass;
-						  _prefs.setString('password', textpass);
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: password ?? "Password",
-                        labelText: 'Password (optional)',
-                      ),
-                      textAlign: TextAlign.center,
+                    textAlign: TextAlign.center,
+                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 110, 0, 0),
+                  child: TextField(
+                  style: TextStyle(color: Colors.white),
+                    controller: TextEditingController()..text = password ?? "",
+                    onChanged: (String textpass) {
+                      setState(() {
+                        password = textpass;
+                        _prefs.setString('password', textpass);
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: password ?? "Password",
+                      labelText: 'Password (optional)',
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 190, 0, 0),
+                child: DropdownButton<String>(
+                  value: _selectedMicrophoneId,
+                  dropdownColor: ninjaDialogColor,
+                  style: TextStyle(color: Colors.white),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      _prefs.setString('audioDeviceId', newValue);
+                      setState(() {
+                        _selectedMicrophoneId = newValue;
+                        Navigator.pop(context);
+                        _showAddressDialog(context);
+                      });
+                    }
+                  },
+                  items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
+                    return DropdownMenuItem<String>(
+                      value: device.deviceId,
+                      child: Text(device.label),
+                    );
+                  }).toList(),
                 ),
-				Padding(
-				  padding: const EdgeInsets.fromLTRB(0, 190, 0, 0),
-				  child: DropdownButton<String>(
-					value: _selectedMicrophoneId,
-                    dropdownColor: ninjaDialogColor,
-                    style: TextStyle(color: Colors.white),
-  					onChanged: (String? newValue) {
-					  if (newValue != null) {
-						_prefs.setString('audioDeviceId', newValue);
-						setState(() {
-						  _selectedMicrophoneId = newValue;
-						  Navigator.pop(context);
-						  _showAddressDialog(context);
-						});
-					  }
-					},
-					items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
-					  return DropdownMenuItem<String>(
-						value: device.deviceId,
-						child: Text(device.label),
-					  );
-					}).toList(),
-				  ),
-				),
+              ),
 
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 240, 0, 0),
+                  child: SwitchListTile(
+                    title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
+                      value: quality,
+                      onChanged: (bool value) {
+                        _prefs.setBool('resolution', value);
+                        setState(() {
+                          quality = value;
+                          Navigator.pop(context);
+                          _showAddressDialog(context);
+                        });
+                      }),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 280, 0, 0),
+                  child: SwitchListTile(
+                    title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
+                      value: landscape,
+                      onChanged: (bool value) {
+                        _prefs.setBool('landscape', value);
+                        setState(() {
+                          landscape = value;
+                          Navigator.pop(context);
+                          _showAddressDialog(context);
+                        });
+                      }
+                  ),
+              ),
+              if (!advanced)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 240, 0, 0),
+                  padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
+                  
                     child: SwitchListTile(
-                      title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
-                        value: quality,
+                    
+                      title: const Text('Advanced', style: TextStyle(color: Colors.white)),
+                        value: advanced,
                         onChanged: (bool value) {
-                          _prefs.setBool('resolution', value);
+                          _prefs.setBool('advanced', value);
                           setState(() {
-                            quality = value;
+                            advanced = value;
                             Navigator.pop(context);
                             _showAddressDialog(context);
                           });
                         }),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 280, 0, 0),
-                    child: SwitchListTile(
-                      title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
-                        value: landscape,
-                        onChanged: (bool value) {
-                          _prefs.setBool('landscape', value);
-                          setState(() {
-                            landscape = value;
-                            Navigator.pop(context);
-                            _showAddressDialog(context);
-                          });
-                        }
-					),
-                ),
-                if (!advanced)
+                if (advanced)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
-                    
-                      child: SwitchListTile(
-                      
-                        title: const Text('Advanced', style: TextStyle(color: Colors.white)),
-                          value: advanced,
-                          onChanged: (bool value) {
-                            _prefs.setBool('advanced', value);
-                            setState(() {
-                              advanced = value;
-                              Navigator.pop(context);
-                              _showAddressDialog(context);
-                            });
-                          }),
+                      child: TextField(
+                      style: TextStyle(color: Colors.white),
+                        onChanged: (String text) {
+                          setState(() {
+                            WSSADDRESS = text;
+                            _prefs.setString('WSSADDRESS', WSSADDRESS);
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: WSSADDRESS,
+                          labelText: 'Handshake server',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                   ),
                   if (advanced)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
+                      padding: const EdgeInsets.fromLTRB(0, 375, 0, 0),
                         child: TextField(
-                        style: TextStyle(color: Colors.white),                          onChanged: (String text) {
+                        style: TextStyle(color: Colors.white),
+                          onChanged: (String text) {
                             setState(() {
-                              WSSADDRESS = text;
-                              _prefs.setString('WSSADDRESS', WSSADDRESS);
+                              TURNSERVER = text;
+                              _prefs.setString('TURNSERVER', TURNSERVER);
                             });
                           },
                           decoration: InputDecoration(
-                            hintText: WSSADDRESS,
-                            labelText: 'Handshake server',
+                            hintText: TURNSERVER,
+                            labelText: 'TURN server',
                           ),
                           textAlign: TextAlign.center,
                         ),
                     ),
-                    if (advanced)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 375, 0, 0),
-                          child: TextField(
-                          style: TextStyle(color: Colors.white),                            onChanged: (String text) {
-                              setState(() {
-                                TURNSERVER = text;
-                                _prefs.setString('TURNSERVER', TURNSERVER);
-                              });
-                            },
-                            decoration: InputDecoration(
-                              hintText: TURNSERVER,
-                              labelText: 'TURN server',
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                      ),
-              ])),
-                actions: <Widget>[
-  TextButton(
-    child: Text('CANCEL',  // Removed const
-      style: TextStyle(
-        color: ninjaAccentColor,
-        fontWeight: FontWeight.bold
+            ])),
+          actions: <Widget>[
+            TextButton(
+              child: Text('CANCEL',  // Removed const
+                style: TextStyle(
+                  color: ninjaAccentColor,
+                  fontWeight: FontWeight.bold
+                )
+              ),
+              onPressed: () {
+                Navigator.pop(context, DialogDemoAction.cancel);
+              }
+            ),
+            TextButton(
+              child: Text('CONNECT',  // Removed const
+                style: TextStyle(
+                  color: ninjaAccentColor,
+                  fontWeight: FontWeight.bold
+                )
+              ),
+              onPressed: () {
+                Navigator.pop(context, DialogDemoAction.connect);
+              }
+            )
+          ]
       )
-    ),
-    onPressed: () {
-      Navigator.pop(context, DialogDemoAction.cancel);
-    }
-  ),
-  TextButton(
-    child: Text('CONNECT',  // Removed const
-      style: TextStyle(
-        color: ninjaAccentColor,
-        fontWeight: FontWeight.bold
-      )
-    ),
-    onPressed: () {
-      Navigator.pop(context, DialogDemoAction.connect);
-    }
-  )
-]
-        )
-      );
-    }
+    );
+  }
+  
   _initItems() async {
-	  
-    items = < RouteItem > [];
-	
-	if (Platform.isIOS) {
-		  bool versionSupported = await isIosVersionSupported();
-		  if (!versionSupported) {
-			
-			items.add(RouteItem(
-			  title: 'Update iOS to Screenshare',
-			  subtitle: 'Screensharing requires iOS 16.4 or newer',
-			  icon: Icons.screen_share,
-			  push: (BuildContext context) {
-				_deviceID = "screen";
-				_showAddressDialog(context);
-			  }));
-			
-			
-		  } else {
-			  items.add(RouteItem(
-				  title: 'SCREEN',
-				  subtitle: 'Share your device\'s screen',
-				  icon: Icons.screen_share,
-				  push: (BuildContext context) {
-					_deviceID = "screen";
-					_showAddressDialog(context);
-				  }));
-		  }
-	} else {
-		items.add(RouteItem(
-		  title: 'SCREEN',
-		  subtitle: 'Share your device\'s screen',
-		  icon: Icons.screen_share,
-		  push: (BuildContext context) {
-			_deviceID = "screen";
-			_showAddressDialog(context);
-		  }));
-	}
-	
+    items = <RouteItem>[];
+    
+    // Existing code for iOS version check...
+    if (Platform.isIOS) {
+      bool versionSupported = await isIosVersionSupported();
+      if (!versionSupported) {
+        items.add(RouteItem(
+          title: 'Update iOS to Screenshare',
+          subtitle: 'Screensharing requires iOS 16.4 or newer',
+          icon: Icons.screen_share,
+          push: (BuildContext context) {
+            _deviceID = "screen";
+            _showAddressDialog(context);
+          }));
+      } else {
+        items.add(RouteItem(
+          title: 'SCREEN',
+          subtitle: 'Share your device\'s screen',
+          icon: Icons.screen_share,
+          push: (BuildContext context) {
+            _deviceID = "screen";
+            _showAddressDialog(context);
+          }));
+      }
+    } else {
+      items.add(RouteItem(
+        title: 'SCREEN',
+        subtitle: 'Share your device\'s screen',
+        icon: Icons.screen_share,
+        push: (BuildContext context) {
+          _deviceID = "screen";
+          _showAddressDialog(context);
+        }));
+    }
+    
+    // Rest of the camera/device detection code...
     var devices = await navigator.mediaDevices.enumerateDevices();
-	print(devices);
-
-	
+    
     for (var item in devices) {
       if (item.kind == "audioinput"){
-		_microphones.insert(0, MediaDeviceInfo(deviceId: item.deviceId, label: item.label));
-		print(item.deviceId);
-		print(item.label);
-		print(item);
-		print("------------");
-		continue;		
-	  } 
+        _microphones.insert(0, MediaDeviceInfo(deviceId: item.deviceId, label: item.label));
+        continue;        
+      } 
       if (item.kind != "videoinput") {
         continue;
       }
@@ -675,9 +712,9 @@ _showAddressDialog(context) {
           _showAddressDialog(context);
         }));
     }
-	
-	_microphones.insert(0, MediaDeviceInfo(deviceId: 'default', label: 'Default Microphone'));
-	
+    
+    _microphones.insert(0, MediaDeviceInfo(deviceId: 'default', label: 'Default Microphone'));
+    
     items.add(RouteItem(
       title: 'MICROPHONE',
       subtitle: 'Share microphone audio only',
@@ -686,17 +723,17 @@ _showAddressDialog(context) {
         _deviceID = "microphone";
         _showAddressDialog(context);
       }));
+      
+    // Enhanced web version menu item 
     items.add(RouteItem(
-      title: 'WEB VERSION',
-      subtitle: 'More features available',
-      icon: Icons.grid_view,
+      title: 'WEB VERSION ★',
+      subtitle: 'Full features and better quality/performance',
+      icon: Icons.star,
       push: (BuildContext context) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => WebViewScreen(url: "https://vdo.ninja/?app=1")),
-        );
+        _showWebVersionDialog(context);
       },
     ));
+    
     items.add(RouteItem(
       title: 'HOW TO USE',
       subtitle: 'A simple guide on using the VDO.Ninja native app',
@@ -710,6 +747,84 @@ _showAddressDialog(context) {
     ));
     setState(() {});
   }
+  
+  void _showWebVersionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Web Version Benefits'),
+          backgroundColor: ninjaDialogColor,
+          surfaceTintColor: Colors.transparent,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('The web version offers:',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                ),
+                SizedBox(height: 10),
+                _benefitItem('Up to 4K video options'),
+                _benefitItem('Two-way chat support'),
+                _benefitItem('Advanced customization options'),
+                _benefitItem('Often better quality video'),
+                _benefitItem('Faster reconnection speeds'),
+                SizedBox(height: 10),
+                const Text('Try the web version at https://vdo.ninja if you experience issues with the native app.',
+                  style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic)
+                ),
+              ],
+            )
+          ),
+          actions: [
+            TextButton(
+              child: Text('CANCEL', 
+                style: TextStyle(
+                  color: ninjaAccentColor,
+                  fontWeight: FontWeight.bold
+                )
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+              }
+            ),
+            TextButton(
+              child: Text('OPEN WEB VERSION', 
+                style: TextStyle(
+                  color: ninjaAccentColor,
+                  fontWeight: FontWeight.bold
+                )
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => WebViewScreen(url: "https://vdo.ninja/?app=1")),
+                );
+              }
+            ),
+          ],
+        );
+      }
+    );
+  }
+  
+  Widget _benefitItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(text, style: const TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
+    );
+  }
+  
   _openDiscord() async {
     final Uri url = Uri.parse('https://discord.vdo.ninja/');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank')) {
@@ -718,22 +833,26 @@ _showAddressDialog(context) {
   }
 }
 
-final PlatformWebViewControllerCreationParams params =
-  const PlatformWebViewControllerCreationParams();
+// Move WebViewScreen to top-level
 class WebViewScreen extends StatefulWidget {
   final String url;
-  WebViewScreen({
-    required this.url
-  });
+  WebViewScreen({required this.url});
+  
   @override
   _WebViewScreenState createState() => _WebViewScreenState();
 }
-class _WebViewScreenState extends State < WebViewScreen > {
-  Future < void > requestCameraPermission() async {
+
+class _WebViewScreenState extends State<WebViewScreen> {
+  Future<void> requestCameraPermission() async {
     final status = await Permission.camera.request();
-    if (status == PermissionStatus.granted) {} else if (status == PermissionStatus.denied) {} else if (status == PermissionStatus.permanentlyDenied) {}
+    if (status == PermissionStatus.granted) {} 
+    else if (status == PermissionStatus.denied) {} 
+    else if (status == PermissionStatus.permanentlyDenied) {}
   }
+  
   late WebViewController controller;
+  final PlatformWebViewControllerCreationParams params = const PlatformWebViewControllerCreationParams();
+  
   @override
   void initState() {
     super.initState();
@@ -742,13 +861,15 @@ class _WebViewScreenState extends State < WebViewScreen > {
       onPermissionRequest: (WebViewPermissionRequest request) {
         request.grant();
       },
-    )..setJavaScriptMode(JavaScriptMode.unrestricted)..setBackgroundColor(const Color(0x00000000))..setNavigationDelegate(
-      NavigationDelegate(
-        onProgress: (int progress) {},
-        onPageStarted: (String url) {
-          print('Loading page');
-        },
-        onPageFinished: (String url) {},
+    )..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {},
+          onPageStarted: (String url) {
+            print('Loading page');
+          },
+          onPageFinished: (String url) {},
         onWebResourceError: (WebResourceError error) {},
         onNavigationRequest: (NavigationRequest request) {
           return NavigationDecision.navigate;

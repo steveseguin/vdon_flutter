@@ -1,20 +1,25 @@
-// signaling.dart
+// signaling.dart -- NEW , does not connect
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+// Conditional import for WebSocket (assuming '../utils/websocket.dart' exists for native)
 import '../utils/websocket.dart'
     if (dart.library.js) '../utils/websocket_web.dart';
 import 'dart:math';
 import 'dart:core';
 import 'dart:io' show Platform;
-import 'package:tuple/tuple.dart';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:convert/convert.dart';
 import 'package:permission_handler/permission_handler.dart';
+// Import specific iOS audio configuration
+import 'package:flutter_webrtc/src/native/ios/audio_configuration.dart';
+// Import specific Android audio configuration (optional but good practice)
+// import 'package:flutter_webrtc/src/native/android/audio_configuration.dart';
+import 'package:flutter/services.dart';
 
-
+// --- Enums and Helper Functions (Keep as is) ---
 enum SignalingState {
   ConnectionOpen,
   ConnectionClosed,
@@ -34,87 +39,220 @@ String bytesToHex(List<int> bytes) {
 }
 
 String generateHash(String inputStr, [int? length]) {
-  // Convert the input string to bytes
   List<int> inputBytes = utf8.encode(inputStr);
-
-  // Calculate the SHA-256 hash of the input bytes
   Digest sha256Hash = sha256.convert(inputBytes);
-
-  // If a length is provided, truncate the hash to that length
   if (length != null) {
-    List<int> hashBytes = sha256Hash.bytes.sublist(0, length ~/ 2);
+    List<int> hashBytes = sha256Hash.bytes.sublist(
+        0,
+        (length ~/ 2)
+            .clamp(0, sha256Hash.bytes.length)); // Ensure length is valid
     return bytesToHex(hashBytes);
   } else {
     return bytesToHex(sha256Hash.bytes);
   }
 }
+// --- End Enums and Helper Functions ---
 
-
+// --- iOS Silent Audio Player (Keep as is, crucial for background) ---
 class IosSilentAudioPlayer {
   MediaStream? _stream;
+  RTCPeerConnection? _pc; // Use a dummy PeerConnection
   bool _isActive = false;
-  
+
   bool get isActive => _isActive;
-  
-  Future<MediaStream?> createSilentAudioStream() async {
-    if (!Platform.isIOS) return null;
-    
+
+  Future<void> createSilentAudioStream() async {
+    if (!Platform.isIOS || _isActive) return;
+
+    print("Creating iOS silent audio stream...");
+    // Use minimal constraints, disabling processing is key
     final Map<String, dynamic> constraints = {
       'audio': {
         'mandatory': {
-          'googNoiseSuppression': false,
+          'googNoiseSuppression': false, // Disable processing
           'googEchoCancellation': false,
           'googAutoGainControl': false,
           'googHighpassFilter': false,
           'googNoiseSuppression2': false,
           'googEchoCancellation2': false,
-          'googAutoGainControl2': false
+          'googAutoGainControl2': false,
+          'noiseSuppression': false, // Standard names
+          'echoCancellation': false,
+          'autoGainControl': false,
         },
-        'optional': []
+        'optional': [] // No specific device needed
       },
+      'video': false
     };
 
     try {
+      // 1. Get a silent audio track
       _stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
       final audioTrack = _stream?.getAudioTracks().first;
+
       if (audioTrack != null) {
-        audioTrack.enabled = true;
-        
-        await audioTrack.applyConstraints({
-          'autoGainControl': false,
-          'noiseSuppression': false,
-          'echoCancellation': false
-        });
-        
+        // 2. Create a dummy PeerConnection
+        _pc = await createPeerConnection(
+            {'iceServers': []}, {}); // No servers needed
+
+        // 3. Add the track to the PeerConnection to keep it active
+        await _pc!.addTrack(audioTrack, _stream!);
+
+        // 4. Create an offer - this helps keep the audio session active
+        // We don't need to send this offer anywhere.
+        try {
+          await _pc!.createOffer({});
+          print("Dummy offer created for silent stream.");
+        } catch (e) {
+          print("Warning: Could not create dummy offer: $e");
+        }
+
+        audioTrack.enabled = true; // Ensure track is enabled
         _isActive = true;
+        print('iOS silent audio stream is active.');
+      } else {
+        print('Failed to get silent audio track.');
+        _isActive = false;
+        dispose(); // Clean up if track failed
       }
-      
-      return _stream;
     } catch (e) {
-      print('Failed to create iOS silent audio stream: $e');
+      print('ERROR creating iOS silent audio stream: $e');
       _isActive = false;
-      return null;
+      dispose(); // Clean up on error
     }
   }
 
   void dispose() {
+    print("Disposing iOS silent audio stream...");
     if (_stream != null) {
       _stream?.getTracks().forEach((track) {
-        track.enabled = false;
-        track.stop();
+        try {
+          track.enabled = false; // Disable first
+          track.stop(); // Then stop
+        } catch (e) {
+          print("Error stopping silent track: $e");
+        }
       });
+      _stream?.dispose();
       _stream = null;
     }
+    if (_pc != null) {
+      try {
+        _pc!.close();
+      } catch (e) {
+        print("Error closing dummy peer connection: $e");
+      }
+      _pc = null;
+    }
     _isActive = false;
+    print("iOS silent audio stream disposed.");
+  }
+}
+// --- End iOS Silent Audio Player ---
+
+
+class CodecsHandler {
+  static String setVideoBitrates(String sdp, Map<String, dynamic> params, [String? codec]) {
+    var sdpLines = sdp.split('\r\n');
+    final String maxBitrateStr = params['max'].toString();
+    final String minBitrateStr = params['min'].toString();
+    
+    // Find the m line for video
+    final mLineIndex = _findLine(sdpLines, 'm=', 'video');
+    if (mLineIndex == null) {
+      return sdp;
+    }
+    
+    // Find appropriate codec payload
+    String codecPayload = '';
+    if (codec != null) {
+      final codecIndex = _findLine(sdpLines, 'a=rtpmap', codec.toUpperCase()+'/90000');
+      if (codecIndex != null) {
+        codecPayload = _getCodecPayloadType(sdpLines[codecIndex]);
+      }
+    }
+    
+    // If no specific codec requested, use the first video codec
+    if (codecPayload.isEmpty) {
+      final videoMLine = sdpLines[mLineIndex];
+      final pattern = RegExp(r'm=video\s\d+\s[A-Z/]+\s');
+      final parts = videoMLine.split(pattern);
+      if (parts.length > 1) {
+        final sendPayloadType = parts[1].split(' ')[0];
+        codecPayload = sendPayloadType;
+      } else {
+        // Handle SDP format variation
+        final simplePattern = RegExp(r'm=video\s\d+\s\w+\s');
+        final match = simplePattern.firstMatch(videoMLine);
+        if (match != null) {
+          final payloadSection = videoMLine.substring(match.end);
+          codecPayload = payloadSection.trim().split(' ')[0];
+        }
+      }
+    }
+    
+    // Add b=AS line for overall session bandwidth
+    final asLineIndex = _findLine(sdpLines, 'b=AS:');
+    if (asLineIndex != null) {
+      // Update existing bandwidth line
+      sdpLines[asLineIndex] = 'b=AS:$maxBitrateStr';
+    } else {
+      // Add new bandwidth line after m= line
+      sdpLines.insert(mLineIndex + 1, 'b=AS:$maxBitrateStr');
+      
+      // Add TIAS bandwidth line as well (Transport Independent Application Specific)
+      // TIAS is in bits per second, AS is in kilobits per second
+      final tiasBitrate = (int.parse(maxBitrateStr) * 1000).toString();
+      sdpLines.insert(mLineIndex + 2, 'b=TIAS:$tiasBitrate');
+    }
+    
+    // Find the a=fmtp line for the codec and add bitrate parameters
+    final fmtpLineIndex = _findLine(sdpLines, 'a=fmtp:$codecPayload');
+    if (fmtpLineIndex != null) {
+      String fmtpLine = sdpLines[fmtpLineIndex];
+      // Check if we already have bitrate params
+      if (!fmtpLine.contains('x-google-min-bitrate') && 
+          !fmtpLine.contains('x-google-max-bitrate')) {
+        
+        final bitrates = 'x-google-min-bitrate=$minBitrateStr;x-google-max-bitrate=$maxBitrateStr';
+        
+        if (fmtpLine.contains(';')) {
+          sdpLines[fmtpLineIndex] = fmtpLine + ';' + bitrates;
+        } else {
+          sdpLines[fmtpLineIndex] = fmtpLine + ' ' + bitrates;
+        }
+      }
+    } else if (codecPayload.isNotEmpty) {
+      // If no a=fmtp line exists, create one
+      sdpLines.add('a=fmtp:$codecPayload x-google-min-bitrate=$minBitrateStr;x-google-max-bitrate=$maxBitrateStr');
+    }
+    
+    return sdpLines.join('\r\n');
+  }
+  
+  // Helper method to find a line in SDP
+  static int? _findLine(List<String> sdpLines, String prefix, [String? substr]) {
+    for (int i = 0; i < sdpLines.length; i++) {
+      if (sdpLines[i].startsWith(prefix)) {
+        if (substr == null || sdpLines[i].toLowerCase().contains(substr.toLowerCase())) {
+          return i;
+        }
+      }
+    }
+    return null;
+  }
+  
+  // Helper to get codec payload type
+  static String _getCodecPayloadType(String sdpLine) {
+    final pattern = RegExp(r'a=rtpmap:(\d+) \w+\/\d+');
+    final match = pattern.firstMatch(sdpLine);
+    return match != null ? match.group(1)! : '';
   }
 }
 
-// Add this as a class variable in your Signaling class
-final _iosSilentAudio = IosSilentAudioPlayer();
 
 /*
- * callbacks for Signaling API.
+ * Callbacks for Signaling API.
  */
 typedef void CallStateCallback(CallState state);
 typedef void StreamStateCallback(MediaStream stream);
@@ -125,67 +263,117 @@ typedef void DataChannelCallback(RTCDataChannel dc);
 
 class Signaling {
   var streamID = "";
-  var deviceID = "screen";
+  var deviceID = "screen"; // Default or passed in
   var hashcode = "";
   var roomhashcode = "";
   var roomID = "";
-  var quality = false;
+  var quality = false; // Default or passed in
   var active = false;
-  var WSSADDRESS = 'wss://wss.vdo.ninja:443';
+  var WSSADDRESS = 'wss://wss.vdo.ninja:443'; // Default or passed in
   var UUID = "";
-  var TURNLIST = [];
-  var audioDeviceId = "default";
-  var salt = "vdo.ninja";
-  var password = "someEncryptionKey123";
-  var usepassword = true;
+  var TURNLIST = []; // Default or passed in
+  var audioDeviceId = "default"; // Default or passed in
+  var salt = "vdo.ninja"; // Keep salt constant
+  var password = ""; // Default or passed in
+  var usepassword = false;
   MediaStream? _localStream;
-  Signaling(_streamID, _deviceID, _audioDeviceId, _roomID, _quality,
-      _WSSADDRESS, _TURNLIST, _password) {
-    // INIT CLASS
+  var _semaphores = <String, bool>{};
+  // --- Add iOS Silent Audio Player instance ---
+  final _iosSilentAudio = IosSilentAudioPlayer();
+  var reconnectionAttempt = 0;
+	final maxReconnectionAttempts = 5;
+	final initialReconnectDelayMs = 1000;
+	final maxReconnectDelayMs = 30000;
+  // -------------------------------------------
 
-    _streamID = _streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
-    _roomID = _roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+  // Constructor
+  Signaling(
+    String streamID,
+    String deviceID,
+    String audioDeviceId,
+    String roomID,
+    bool quality,
+    String wssAddress,
+    List turnList, // Expect List<Map<String, String>> or similar
+    String password,
+  ) {
+    // Sanitize IDs
+    this.streamID = streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
+    this.roomID = roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
 
-    this.streamID = _streamID;
-    this.deviceID = _deviceID;
-    this.audioDeviceId = _audioDeviceId;
-    this.roomID = _roomID;
-    this.quality = _quality;
-    this.WSSADDRESS = _WSSADDRESS;
-    this.TURNLIST = _TURNLIST;
+    this.deviceID = deviceID;
+    this.audioDeviceId = audioDeviceId;
+    this.quality = quality;
+    this.WSSADDRESS = wssAddress;
+    this.TURNLIST = turnList.isNotEmpty
+        ? turnList
+        : [
+            {'url': 'stun:stun.l.google.com:19302'}
+          ]; // Ensure TURN list is not empty, provide default STUN
+    this.password = password;
 
-    if ((_password == "0") || (_password == "false") || (_password == "off")) {
-      this.hashcode = "";
-      this.password = "";
-      this.roomhashcode = "";
+    // Password Handling - Fixed to properly handle password and hash generation
+    if (password.isEmpty || ["0", "false", "off"].contains(password.toLowerCase())) {
       this.usepassword = false;
-    } else if (_password != "") {
-      this.hashcode = generateHash(_password + salt, 6);
-      this.password = _password;
-      if (_roomID != "") {
-        this.roomhashcode = generateHash(_roomID + _password + salt, 16);
-      }
-    } else {
       this.hashcode = "";
       this.roomhashcode = "";
+      print("Password protection disabled.");
+    } else {
+      this.usepassword = true;
+      this.hashcode = generateHash(password + salt, 6);
+      print("Password protection enabled. Stream Hash: ${this.hashcode}");
+      if (this.roomID.isNotEmpty) {
+        this.roomhashcode = generateHash(this.roomID + password + salt, 16);
+        print("Room Hash: ${this.roomhashcode}");
+      } else {
+        this.roomhashcode = "";
+      }
     }
 
-    print("HASH CODE");
-    print(this.hashcode);
-
-    if (this.WSSADDRESS != "wss://wss.vdo.ninja:443") {
+    // Generate UUID if using custom WSS
+    if (this.WSSADDRESS != 'wss://wss.vdo.ninja:443') {
       var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
-      Random _rnd = Random();
-      String getRandomString(int length) =>
-          String.fromCharCodes(Iterable.generate(
-              length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
-      this.UUID = getRandomString(16);
+      Random rnd = Random();
+      this.UUID = String.fromCharCodes(Iterable.generate(
+          16, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+      print("Using custom WSS. Generated UUID: ${this.UUID}");
+    } else {
+      this.UUID = ""; // No UUID needed for default WSS
     }
   }
+Future<void> setFocusPoint(Point<double> point) async {
+  if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+    final videoTrack = _localStream!.getVideoTracks()[0];
+    try {
+      print("Setting focus point: $point");
+      await CameraUtils.setFocusPoint(videoTrack, point);
+      
+      print("Focus point set successfully");
+    } catch (e) {
+      print("Error setting focus point: $e");
+    }
+  }
+}
+Future<void> setExposurePoint(Point<double> point) async {
+  if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+    final videoTrack = _localStream!.getVideoTracks()[0];
+    try {
+      print("Setting exposure point: $point");
+      await CameraUtils.setExposurePoint(videoTrack, point);
+      
+      print("Exposure point set successfully");
+    } catch (e) {
+      print("Error setting exposure point: $e");
+    }
+  }
+}
+  // --- Encryption Methods (Keep as is) ---
   Future<List<String>> encryptMessage(String message, [String? phrase]) async {
     phrase ??= password + salt;
+    if (phrase.isEmpty) return [message, ""]; // No encryption if no password
+
     final key = _generateKey(phrase);
-    final iv = encrypt.IV.fromSecureRandom(16);
+    final iv = encrypt.IV.fromSecureRandom(16); // Use secure random IV
     final encrypter =
         encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
 
@@ -196,88 +384,217 @@ class Signaling {
   Future<String> decryptMessage(String hexEncryptedData, String hexIv,
       [String? phrase]) async {
     phrase ??= password + salt;
-    final key = _generateKey(phrase);
-    final iv = encrypt.IV(Uint8List.fromList(hex.decode(hexIv)));
-    final encrypter =
-        encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
+    if (phrase.isEmpty || hexIv.isEmpty)
+      return hexEncryptedData; // Cannot decrypt without phrase/IV
 
-    final encryptedData =
-        encrypt.Encrypted(Uint8List.fromList(hex.decode(hexEncryptedData)));
-    final decryptedBytes = encrypter.decryptBytes(encryptedData, iv: iv);
-    return utf8.decode(decryptedBytes); // Return the decrypted string
+    try {
+      final key = _generateKey(phrase);
+      final iv = encrypt.IV(Uint8List.fromList(hex.decode(hexIv)));
+      final encrypter =
+          encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
+
+      final encryptedData =
+          encrypt.Encrypted(Uint8List.fromList(hex.decode(hexEncryptedData)));
+      final decryptedBytes = encrypter.decryptBytes(encryptedData, iv: iv);
+      return utf8.decode(decryptedBytes);
+    } catch (e) {
+      print("Decryption failed: $e. Returning raw data.");
+      // Consider how to handle decryption failures. Returning raw might expose encrypted data.
+      // Maybe return an empty string or throw an error?
+      return ""; // Or throw Exception("Decryption failed");
+    }
   }
 
   Uint8List convertStringToUint8Array(String str) {
-    var bytes = Uint8List(str.length);
+    // Using encode directly is generally preferred
+    return utf8.encode(str) as Uint8List;
+    /* var bytes = Uint8List(str.length);
     for (var i = 0; i < str.length; i++) {
-      bytes[i] = str.codeUnitAt(i);
+      bytes[i] = str.codeUnitAt(i); // This might not handle multi-byte UTF-8 correctly
     }
-    return bytes;
+    return bytes; */
   }
 
   encrypt.Key _generateKey(String phrase) {
     final Uint8List phraseBytes = convertStringToUint8Array(phrase);
     final digest = sha256.convert(phraseBytes);
-    return encrypt.Key(
-        Uint8List.fromList(digest.bytes)); // Convert List<int> to Uint8List
+    // Ensure key is 32 bytes (256 bits) for AES-256
+    return encrypt.Key(Uint8List.fromList(digest.bytes));
   }
+  // --- End Encryption Methods ---
 
-  Future<void> changeAudioSource(String audioDeviceId) async {
-    if (_localStream != null) {
-      // Add null check
-      final newLocalStream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'optional': {'sourceId': audioDeviceId},
-        },
-        'video': false,
-      });
+  // --- iOS Audio Session Initialization ---
+  Future<void> initializeIOSAudioSession({bool forScreenShare = false}) async {
+    if (Platform.isIOS) {
+      print("Initializing iOS Audio Session...");
+      // Start the silent audio player to help keep the session active
+      await _iosSilentAudio.createSilentAudioStream();
 
-      var newAudioTrack = newLocalStream.getAudioTracks()[0];
-
-      for (var session in _sessions.values) {
-        var senders = await session.getSenders();
-
-        for (var sender in senders) {
-          if (sender.track?.kind == 'audio') {
-            await sender.replaceTrack(newAudioTrack);
-          }
-        }
+      // Configure audio session based on use case
+      AppleAudioConfiguration config;
+      if (forScreenShare) {
+        print("Configuring for Screen Share (using videoRecording mode).");
+        // This mode *might* help with system audio but often prioritizes mic.
+        // System audio capture is heavily restricted on iOS.
+        config = AppleAudioConfiguration(
+          appleAudioCategory:
+              AppleAudioCategory.playAndRecord, // Need record for mic
+          appleAudioCategoryOptions: {
+            AppleAudioCategoryOption.allowBluetooth,
+            AppleAudioCategoryOption.mixWithOthers, // Allow mixing if possible
+            // AppleAudioCategoryOption.allowAirPlay, // Optional
+            AppleAudioCategoryOption
+                .defaultToSpeaker, // Usually desired for screen share sound
+          },
+          appleAudioMode:
+              AppleAudioMode.videoRecording, // Often used with ReplayKit
+        );
+      } else {
+        print("Configuring for Camera/Mic (using voiceChat mode).");
+        // Standard configuration for voice/video chat
+        config = AppleAudioConfiguration(
+          appleAudioCategory: AppleAudioCategory.playAndRecord,
+          appleAudioCategoryOptions: {
+            AppleAudioCategoryOption
+                .allowBluetooth, // Essential for BT headsets
+            AppleAudioCategoryOption
+                .mixWithOthers, // Allow background music etc.
+            AppleAudioCategoryOption
+                .defaultToSpeaker, // Default to speaker if no headset
+          },
+          appleAudioMode:
+              AppleAudioMode.voiceChat, // Optimized for communication
+        );
       }
 
-      if (_localStream!.getAudioTracks().isNotEmpty) {
-        var oldAudioTrack = _localStream!.getAudioTracks()[0];
-        if (oldAudioTrack != null) {
-          _localStream!.removeTrack(oldAudioTrack);
-          oldAudioTrack.stop();
-        }
+      try {
+        await AppleNativeAudioManagement.setAppleAudioConfiguration(config);
+        print("iOS Audio Session configured successfully.");
+      } catch (e) {
+        print("ERROR setting iOS audio configuration: $e");
       }
-
-      _localStream!.addTrack(newAudioTrack);
     }
   }
+  // --- End iOS Audio Session Initialization ---
 
+// Replace the existing changeAudioSource method with this improved version
+Future<void> changeAudioSource(String newAudioDeviceId) async {
+  if (_localStream == null) {
+    print("Cannot change audio source: Local stream not initialized.");
+    return;
+  }
+  print("Attempting to change audio source to: $newAudioDeviceId");
+  this.audioDeviceId = newAudioDeviceId; // Update the stored device ID
+
+  try {
+    // Create a dummy PeerConnection first to avoid the null reference
+    RTCPeerConnection dummyPC = await createPeerConnection({
+      'iceServers': [],
+    }, {});
+    
+    // Get only the new audio track
+    final newAudioStream = await navigator.mediaDevices.getUserMedia({
+      'audio': audioDeviceId == "default"
+          ? {
+              'mandatory': {
+                'googNoiseSuppression': true,
+                'echoCancellation': false,
+                'autoGainControl': true,
+                'noiseSuppression': true,
+                'googAutoGainControl': true,
+                'googEchoCancellation': false,
+              }
+            }
+          : {
+              'optional': [
+                {'sourceId': audioDeviceId}
+              ],
+              'mandatory': {
+                'googNoiseSuppression': true,
+                'echoCancellation': false,
+                'autoGainControl': true,
+                'noiseSuppression': true,
+                'googAutoGainControl': true, 
+                'googEchoCancellation': false,
+              }
+            },
+      'video': false, // Important: only request audio
+    });
+
+    // Cleanup dummy PC
+    await dummyPC.close();
+
+    if (newAudioStream.getAudioTracks().isEmpty) {
+      print("Error: Failed to get new audio track.");
+      return;
+    }
+    var newAudioTrack = newAudioStream.getAudioTracks()[0];
+    print("Got new audio track: ${newAudioTrack.label} (${newAudioTrack.id})");
+
+    MediaStreamTrack? oldAudioTrack;
+    if (_localStream!.getAudioTracks().isNotEmpty) {
+      oldAudioTrack = _localStream!.getAudioTracks()[0];
+      print("Found old audio track: ${oldAudioTrack.label} (${oldAudioTrack.id})");
+    }
+
+    // Replace the track in all active peer connections
+    for (var session in _sessions.values) {
+      var senders = await session.getSenders();
+      for (var sender in senders) {
+        if (sender.track?.kind == 'audio') {
+          print("Replacing audio track in sender: ${sender.senderId}");
+          await sender.replaceTrack(newAudioTrack);
+        }
+      }
+    }
+
+    // Update the local stream reference
+    if (oldAudioTrack != null) {
+      await _localStream!.removeTrack(oldAudioTrack);
+      print("Removed old audio track from local stream.");
+      // Stop the old track *after* removing it
+      try {
+        await oldAudioTrack.stop();
+        print("Stopped old audio track.");
+      } catch (e) {
+        print("Error stopping old audio track: $e");
+      }
+    }
+
+    await _localStream!.addTrack(newAudioTrack);
+    print("Added new audio track to local stream.");
+  } catch (e) {
+    print("Error changing audio source: $e");
+  }
+}
+
+  // Not currently used, changeAudioSource handles this. Keep for reference?
   Future<MediaStreamTrack> _createNewAudioTrack(String deviceId) async {
     final constraints = <String, dynamic>{
-      'audio': {
-        'deviceId': deviceId,
-      },
+      'audio': deviceId == "default" ? true : {'deviceId': deviceId},
+      'video': false,
     };
-    print(constraints);
+    print("Getting new audio track with constraints: $constraints");
     final mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
     final audioTrack = mediaStream.getAudioTracks()[0];
     print("Selected audio track: ${audioTrack.label}");
     return audioTrack;
   }
+  // --- End Audio Source Change ---
 
+  // --- WebSocket and PeerConnection Management ---
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
   late SimpleWebSocket _socket;
-  var _port = 443;
-  var _sessions = {};
-  var _sessionID = {};
+  bool _isSocketConnected = false;
+  // var _port = 443; // Not used directly if WSSADDRESS includes port
+  var _sessions = <String, RTCPeerConnection>{}; // Explicit type
+  var _sessionID = <String, String>{}; // Explicit type
 
-  List<MediaStream> _remoteStreams = <MediaStream>[];
+  List<MediaStream> _remoteStreams =
+      <MediaStream>[]; // Keep if needed for remote streams
 
+  // Callbacks
   late Function(SignalingState state) onSignalingStateChange;
   late CallStateCallback onCallStateChange;
   late StreamStateCallback onLocalStream;
@@ -287,6 +604,7 @@ class Signaling {
   late DataChannelMessageCallback onDataChannelMessage;
   late DataChannelCallback onDataChannel;
 
+  // WebRTC Config (Keep as is)
   String get sdpSemantics => 'unified-plan';
   final Map<String, dynamic> _config = {
     'mandatory': {},
@@ -294,666 +612,1218 @@ class Signaling {
       {'DtlsSrtpKeyAgreement': true},
     ]
   };
-
-  final Map<String, dynamic> _dcConstraints = {
+  // Offer/Answer Constraints
+  final Map<String, dynamic> _sdpConstraints = {
     'mandatory': {
-      'OfferToReceiveAudio': false,
-      'OfferToReceiveVideo': false,
+      'OfferToReceiveAudio': false, // Don't expect audio back by default
+      'OfferToReceiveVideo': false, // Don't expect video back by default
     },
     'optional': [],
   };
+  // Data Channel Constraints (Not used currently, keep for future)
+  final Map<String, dynamic> _dcConstraints = {
+    'mandatory': {},
+    'optional': [],
+  };
+  // --- End WebSocket and PeerConnection Management ---
 
-  close() async {
-    _cleanSessions();
+  // --- Public Methods ---
+  Future<void> close() async {
+    print("Closing signaling connection and resources...");
+    await _cleanSessions();
   }
 
-  MediaStream getLocalStream() {
-    if (_localStream != null) {
-      return _localStream!;
-    } else {
-      // Handle the case where _localStream is null, e.g., by throwing an exception
-      // or returning a dummy stream.
-      throw Exception("Local stream not initialized");
-    }
+  MediaStream? getLocalStream() {
+    // Return potentially null stream
+    return _localStream;
   }
 
   void switchCamera() {
-    if (_localStream != null) {
-      // Add null check
+    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+      print("Switching camera...");
+      // Helper.switchCamera expects the track
       Helper.switchCamera(_localStream!.getVideoTracks()[0]);
+    } else {
+      print("Cannot switch camera: Video track not available.");
     }
   }
 
-  void zoomCamera(double zoomLevel) {
-    if (_localStream != null) {
-      // Add null check
-      Helper.setZoom(_localStream!.getVideoTracks()[0], zoomLevel);
+	void zoomCamera(double zoomLevel) {
+	  if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+		try {
+		  // Round to 2 decimal places to reduce unnecessary updates
+		  final roundedZoom = (zoomLevel * 100).round() / 100;
+		  print("Setting zoom level: $roundedZoom");
+		  
+		  final videoTrack = _localStream!.getVideoTracks()[0];
+		  // Use a try-catch block to handle the IllegalStateException
+		  try {
+			CameraUtils.setZoom(videoTrack, roundedZoom);
+		  } catch (e) {
+			print("Error setting zoom: $e");
+		  }
+		} catch (e) {
+		  print("Error accessing video track for zoom: $e");
+		}
+	  } else {
+		print("Cannot zoom: Video track not available.");
+	  }
+	}
+
+  Future<bool> toggleTorch(bool torch) async {
+    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+      final videoTrack = _localStream!.getVideoTracks()[0];
+      try {
+        if (await videoTrack.hasTorch()) {
+          print("Setting torch: $torch");
+          await videoTrack.setTorch(torch);
+          return true; // Success
+        } else {
+          print("[TORCH] Camera does not support torch mode.");
+          return false; // Not supported
+        }
+      } catch (e) {
+        print("[TORCH] Error accessing torch: $e");
+        return false; // Error occurred
+      }
+    }
+    print("[TORCH] Cannot toggle torch: Video track not available.");
+    return false; // No track
+  }
+  
+    // Helper to handle remote SDP descriptions
+  Future<void> _handleRemoteDescription(String remoteUuid, Map mapData) async {
+    var pc = _sessions[remoteUuid];
+    if (pc == null) {
+      print("Received description for unknown session: $remoteUuid. Ignoring.");
+      return;
+    }
+
+    dynamic descriptionData = mapData['description'];
+    Map descriptionMap;
+
+    // Handle the case where description is a String or already a Map
+    if (descriptionData is String) {
+      // Decrypt if necessary
+      if (usepassword && mapData.containsKey('vector')) {
+        try {
+          String decryptedJson =
+              await decryptMessage(descriptionData, mapData['vector']);
+          descriptionMap = _decoder
+              .convert(decryptedJson); // Use _decoder instead of jsonDecode
+          print("Decrypted remote description from $remoteUuid.");
+        } catch (e) {
+          print("Error decrypting description from $remoteUuid: $e. Aborting.");
+          return;
+        }
+      } else {
+        // Try to parse the string as JSON if it's not encrypted
+        try {
+          descriptionMap = _decoder
+              .convert(descriptionData); // Use _decoder instead of jsonDecode
+          print("Parsed string description as JSON from $remoteUuid.");
+        } catch (e) {
+          print(
+              "Error parsing description string from $remoteUuid: $e. Aborting.");
+          return;
+        }
+      }
+    } else if (descriptionData is Map) {
+      // Already a map, so we can use it directly
+      descriptionMap = descriptionData;
+    } else {
+      print(
+          "Invalid description format (neither String nor Map) from $remoteUuid. Ignoring.");
+      return;
+    }
+
+    // Check if the descriptionMap has the required fields
+    if (descriptionMap['sdp'] == null || descriptionMap['type'] == null) {
+      print("Invalid description format received from $remoteUuid. Ignoring.");
+      return;
+    }
+
+    String sdp = descriptionMap['sdp'];
+    String type = descriptionMap['type'];
+    var description = RTCSessionDescription(sdp, type);
+
+    print("Setting remote description ($type) for $remoteUuid.");
+
+    try {
+      await pc.setRemoteDescription(description);
+      print("Remote description set successfully for $remoteUuid.");
+
+      // If it was an offer, create and send an answer
+      if (type == 'offer') {
+        print("Received offer from $remoteUuid. Creating answer...");
+        await _createAnswer(remoteUuid, _sessionID[remoteUuid]!, pc);
+      } else {
+        // It was an answer
+        print("Received answer from $remoteUuid.");
+      }
+    } catch (e) {
+      print("ERROR setting remote description for $remoteUuid: $e");
+      // Handle error, maybe close connection?
+      _handleBye(remoteUuid);
     }
   }
   
-  Future<void> handleConnectionTimeout(String sessionId, int timeoutMs) async {
-	  // Store connection start time
-	  final connectionStartTime = DateTime.now();
-	  
-	  // Create a timer to check connection status periodically
-	  Timer.periodic(Duration(seconds: 30), (timer) {
-		if (!active) {
-		  timer.cancel();
-		  return;
-		}
-		
-		// Calculate time since connection started
-		final timeElapsed = DateTime.now().difference(connectionStartTime).inMilliseconds;
-		
-		// Check if we've exceeded the timeout without establishing connection
-		if (timeElapsed > timeoutMs && _sessions[sessionId] != null) {
-		  final connectionState = _sessions[sessionId].connectionState;
-		  
-		  // If connection is not established or has failed, attempt reconnection
-		  if (connectionState == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-			  connectionState == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
-			
-			print("Connection timeout detected for session $sessionId. Attempting reconnection...");
-			
-			// Clean up existing session
-			_sessions[sessionId].close();
-			_sessions.remove(sessionId);
-			_sessionID.remove(sessionId);
-			
-			// Attempt to reconnect
-			if (active) {
-			  // Delay reconnection attempt to avoid rapid reconnection loops
-			  Future.delayed(Duration(seconds: 2), () {
-				if (active) {
-				  connect();
-				}
-			  });
-			}
-			
-			timer.cancel();
-		  }
-		}
-	  });
-	}
-
-  toggleTorch(torch) async {
-    if (_localStream != null) {
-      // Add null check
-      try {
-        final videoTrack = _localStream!
-            .getVideoTracks()
-            .firstWhere((track) => track.kind == "video");
-        if (await videoTrack.hasTorch()) {
-          await videoTrack.setTorch(torch);
-          return true;
-        } else {
-          print("[TORCH] Current camera does not support torch mode");
-        }
-      } catch (e) {
-        print("[TORCH] Current camera does not support torch mode 2");
-      }
+  
+// Helper to properly clean up a peer connection
+void _cleanupPeerConnection(String remoteUuid) {
+  final pc = _sessions.remove(remoteUuid);
+  _sessionID.remove(remoteUuid);
+  
+  if (pc != null) {
+    try {
+      pc.close();
+      print("Cleaned up PeerConnection for $remoteUuid");
+    } catch (e) {
+      print("Error closing PeerConnection for $remoteUuid: $e");
     }
-    return false;
   }
+}
 
   void muteMic() {
-    if (_localStream != null) {
-      // Add null check
-      bool enabled = _localStream!.getAudioTracks()[0].enabled;
-      _localStream!.getAudioTracks()[0].enabled = !enabled;
-      print(_localStream!.getAudioTracks()[0].label);
+    if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
+      bool currentMuteStatus = !_localStream!.getAudioTracks()[0].enabled;
+      bool newEnabledStatus = currentMuteStatus; // enabled = !muted
+      _localStream!.getAudioTracks()[0].enabled = newEnabledStatus;
+      print("Mic enabled: $newEnabledStatus (Muted: ${!newEnabledStatus})");
+    } else {
+      print("Cannot mute/unmute mic: Audio track not available.");
     }
   }
 
-  void invite(peerId, video, useScreen) {}
+  void toggleVideoMute() {
+    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+      bool currentMuteStatus = !_localStream!.getVideoTracks()[0].enabled;
+      bool newEnabledStatus = currentMuteStatus; // enabled = !muted
+      _localStream!.getVideoTracks()[0].enabled = newEnabledStatus;
+      print("Video enabled: $newEnabledStatus (Muted: ${!newEnabledStatus})");
+    } else {
+      print("Cannot mute/unmute video: Video track not available.");
+    }
+  }
 
-  void bye(peerId) {}
+  // Invite/Bye methods not implemented in provided code, keep as stubs if needed
+  void invite(peerId, video, useScreen) {
+    print("Invite function called (Not implemented in detail). Peer: $peerId");
+  }
 
+  void bye(peerId) {
+    print("Bye function called (Not implemented in detail). Peer: $peerId");
+    // You might want to close the specific peer connection here
+    if (_sessions.containsKey(peerId)) {
+      print("Closing connection to peer: $peerId");
+      _sessions[peerId]?.close();
+      _sessions.remove(peerId);
+      _sessionID.remove(peerId);
+    }
+  }
+  // --- End Public Methods ---
+
+  // --- WebSocket Message Handling ---
   void onMessage(message) async {
-    Map<String, dynamic> mapData = message;
-
-    // print(message);
-
-    if (mapData.containsKey('from')) {
-      mapData['UUID'] = mapData['from'];
-      if (mapData.containsKey("request") &&
-          (mapData['request'] == "play") &&
-          mapData.containsKey("streamID")) {
-        if (mapData['streamID'] == streamID + hashcode) {
-          mapData['request'] = "offerSDP";
-        } else {
-          return;
-        }
+    // print("Raw WebSocket message received: $message"); // Debug raw message
+    Map<String, dynamic> mapData;
+    try {
+      // Ensure message is decoded correctly
+      if (message is String) {
+        mapData = _decoder.convert(message);
+      } else if (message is Map) {
+        mapData =
+            Map<String, dynamic>.from(message); // Handle if already decoded map
+      } else {
+        print("Unknown message format received: ${message.runtimeType}");
+        return;
       }
-      // mapData.removeWhere((key, value) => key == "from");
+    } catch (e) {
+      print("Error decoding WebSocket message: $e");
+      return;
     }
 
-    if (mapData['request'] == "offerSDP") {
-      var uuid = mapData['UUID'];
-      Map<String, dynamic> configuration = {
-        'sdpSemantics': "unified-plan",
-        'iceServers': this.TURNLIST
-      };
+    // print("Decoded WebSocket message: $mapData"); // Debug decoded message
 
-      print(configuration);
+    // --- Request Handling Logic (Simplified VDO.Ninja protocol) ---
+    String? requestType;
+    String? uuid; // Remote peer's UUID
 
-      RTCPeerConnection pc = await createPeerConnection(configuration, _config);
-      _sessionID[uuid] = new DateTime.now().toString();
-      _sessions[uuid] = pc;
+    // Handle 'from' field for UUID identification
+    if (mapData.containsKey('from')) {
+      uuid = mapData['from'] as String?;
+      // Keep 'from' for context if needed, or remove if creates issues
+      // mapData['UUID'] = uuid; // Standardize on UUID key if preferred
+    } else if (mapData.containsKey('UUID')) {
+      uuid = mapData['UUID'] as String?;
+    }
 
-      pc.onTrack = (event) {
-        if (event.track.kind == 'video') {
-          onAddRemoteStream.call(event.streams[0]);
-        }
-      };
-
-      if (_localStream != null) {
-        // Add null check
-        _localStream!.getTracks().forEach((track) {
-          pc.addTrack(track, _localStream!);
-        });
+    if (uuid == null || uuid.isEmpty) {
+      // print("Warning: Received message without 'from' or 'UUID'. Ignoring.");
+      // Some messages might not have UUID (e.g., initial server messages)
+      // Handle based on message content if needed
+      if (mapData.containsKey('error')) {
+        print("Server Error Message: ${mapData['error']}");
       }
+      // Handle other non-UUID messages if necessary
+      return;
+    }
 
-      pc.onIceCandidate = (candidate) async {
-        if (candidate == null) {
-          print('onIceCandidate: complete!');
+    // Determine Request Type
+    if (mapData.containsKey('request')) {
+      requestType = mapData['request'] as String?;
+      // Special handling for VDO.Ninja's 'play' request -> map to 'offerSDP'
+      if (requestType == "play" && mapData.containsKey("streamID")) {
+        // Verify stream ID matches the expected format (streamID + optional hashcode)
+        if (mapData['streamID'] == streamID + hashcode) {
+          requestType = "offerSDP"; // Treat 'play' request as an offer request
+          print(
+              "Received 'play' request for matching streamID, treating as offerSDP from $uuid");
+        } else {
+          print(
+              "Received 'play' request for non-matching streamID (${mapData['streamID']}). Ignoring.");
+          return; // Ignore if streamID doesn't match
+        }
+      }
+    } else if (mapData.containsKey('description')) {
+      requestType = "description";
+    } else if (mapData.containsKey('candidate') ||
+        mapData.containsKey('candidates')) {
+      requestType = "candidate";
+    } else if (mapData.containsKey('bye')) {
+      requestType = "bye";
+    }
+    // Add other request types if needed
+
+    // Process based on request type
+    switch (requestType) {
+      case "offerSDP": // Viewer wants to connect, create PC and send offer
+        if (_sessions.containsKey(uuid)) {
+          print(
+              "Session already exists for $uuid. Ignoring new offerSDP request.");
+          // Optional: Maybe close existing session and create new one?
           return;
         }
+        print("Received offerSDP request from: $uuid");
+        await _createPeerConnectionAndOffer(uuid);
+        break;
 
-        var request = Map();
-        request["UUID"] = uuid;
-        request["candidate"] = {
-          // 'sdpMLineIndex': candidate.sdpMlineIndex,
-          'sdpMid': candidate.sdpMid,
-          'candidate': candidate.candidate
-        };
-        request["type"] = "local";
-        request["session"] = _sessionID[uuid];
-        request["streamID"] = streamID + hashcode;
+      case "description": // Received SDP (offer or answer)
+        print("Received SDP description from: $uuid");
+        await _handleRemoteDescription(uuid, mapData);
+        break;
 
-        // request["roomID"] = roomID;
-        if (!UUID.isEmpty) {
-          request["from"] = UUID;
+      case "candidate": // Received ICE candidate(s)
+        // print("Received ICE candidate(s) from: $uuid"); // Can be noisy
+        await _handleRemoteCandidate(uuid, mapData);
+        break;
+
+      case "bye": // Peer disconnected
+        print("Received 'bye' from: $uuid");
+        _handleBye(uuid);
+        break;
+
+      default:
+        print("Received unknown message type or request from $uuid: $mapData");
+        break;
+    }
+  }
+
+
+void _setPeerConnectionHandlers(RTCPeerConnection pc, String remoteUuid, String sessionId) {
+  // ICE candidate handler
+  pc.onIceCandidate = (candidate) async {
+    if (candidate == null) {
+      print("ICE gathering complete for $remoteUuid");
+      return;
+    }
+    
+    try {
+      await _sendIceCandidate(remoteUuid, sessionId, candidate);
+    } catch (e) {
+      print("Error sending ICE candidate: $e");
+    }
+  };
+  
+  // Connection state tracking
+  pc.onIceConnectionState = (state) {
+    print("ICE connection state for $remoteUuid: $state");
+    if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+        state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+        state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+      _cleanupPeerConnection(remoteUuid);
+    }
+  };
+  
+  pc.onConnectionState = (state) {
+    print("PC connection state for $remoteUuid: $state");
+    if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+        state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+        state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+      _cleanupPeerConnection(remoteUuid);
+    } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      print("Peer connection established with $remoteUuid");
+      onCallStateChange?.call(CallState.CallStateConnected);
+    }
+  };
+  
+  // Media handlers
+  pc.onTrack = (event) {
+    if (event.track.kind == 'video' && event.streams.isNotEmpty) {
+      print("Received video track from $remoteUuid");
+      onAddRemoteStream?.call(event.streams[0]);
+    }
+  };
+  
+  pc.onRemoveTrack = (stream, track) {
+    print("Track ${track.kind} removed from $remoteUuid");
+  };
+  
+  // Data channel handler
+  pc.onDataChannel = (channel) {
+    print("Data channel received from $remoteUuid: ${channel.label}");
+    _addDataChannel(channel);
+    onDataChannel?.call(channel);
+  };
+}
+Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
+  // Prevent duplicate connection attempts
+  if (_sessions.containsKey(remoteUuid)) {
+    print("DEBUG: Session already exists for $remoteUuid, ignoring duplicate request");
+    return;
+  }
+  
+  print("DEBUG: Creating PeerConnection for $remoteUuid");
+  
+  // Generate session ID
+  var sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+  _sessionID[remoteUuid] = sessionId;
+  print("DEBUG: Session ID created: $sessionId");
+  
+  try {
+    // Configure ice servers
+    Map<String, dynamic> configuration = {
+      'sdpSemantics': sdpSemantics,
+      'iceServers': this.TURNLIST
+    };
+    print("DEBUG: ICE server configuration: ${jsonEncode(configuration)}");
+    
+    // Create the peer connection
+    print("DEBUG: Calling createPeerConnection...");
+    RTCPeerConnection pc = await createPeerConnection(configuration, _config);
+    print("DEBUG: createPeerConnection returned successfully");
+    
+    // Store the peer connection immediately
+    _sessions[remoteUuid] = pc;
+    print("DEBUG: PeerConnection stored in _sessions map");
+    
+    // Set up all event handlers BEFORE adding tracks
+    // This is crucial - use our handler method to set up all callbacks
+    _setPeerConnectionHandlers(pc, remoteUuid, sessionId);
+    print("DEBUG: Event handlers set up for peer connection");
+    
+    // Check if we have a local stream
+    if (_localStream == null) {
+      print("WARNING: No local stream available for $remoteUuid");
+    } else {
+      print("DEBUG: Local stream available with tracks:");
+      _localStream!.getTracks().forEach((track) {
+        print("DEBUG: - ${track.kind} track: ${track.id}, enabled: ${track.enabled}, label: ${track.label}");
+      });
+      
+      // Add tracks - AFTER the PC is fully set up and handlers are attached
+      print("DEBUG: Beginning to add tracks to PeerConnection");
+      
+      // Add all tracks in one go
+      try {
+        for (var track in _localStream!.getTracks()) {
+          print("DEBUG: Adding ${track.kind} track: ${track.id}, ${track.label}");
+          await pc.addTrack(track, _localStream!);
+          print("DEBUG: ${track.kind} track added successfully");
         }
-
-        if (usepassword) {
-          String candidateJson = jsonEncode(request["candidate"]);
-          List<String> encrypted = await encryptMessage(candidateJson);
-          request["candidate"] = encrypted[0];
-          request["vector"] = encrypted[1];
-        }
-
-        _socket.send(jsonEncode(request));
-      };
-
-		pc.onIceConnectionState = (state) {
-			print(state);
-		};
-		
-		Future.delayed(Duration.zero, () {
-		  _createOffer(uuid);
-		});
-	
-    } else if (mapData.containsKey('description')) {
-      if (usepassword && mapData.containsKey('vector')) {
-        String decryptedJson =
-            await decryptMessage(mapData['description'], mapData['vector']);
-        mapData['description'] = jsonDecode(decryptedJson); // Decode JSON here
+      } catch (e) {
+        print("ERROR: Failed to add tracks: $e");
+        // Continue anyway to create the offer - some implementations allow empty offers
       }
-      if (mapData['description']['type'] == "offer") {
-        Future.delayed(Duration.zero, () async { 
-		  try {
-			await _sessions[mapData['UUID']].setRemoteDescription(
-				RTCSessionDescription(mapData['description']['sdp'], mapData['description']['type'])
-			);
+    }
+    
+    // Create offer
+    print("DEBUG: Creating offer for $remoteUuid");
+    try {
+      print("DEBUG: Calling createOffer...");
+      RTCSessionDescription s = await pc.createOffer(_sdpConstraints);
+      print("DEBUG: Offer SDP created successfully");
+      
+      // Set local description
+      print("DEBUG: Setting local description...");
+      await pc.setLocalDescription(s);
+      print("DEBUG: Local description set successfully");
+      
+      // Apply bitrate modification if needed
+      String sdp = s.sdp!;
+      if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+        // Apply video bitrate limit
+        final params = {'min': 600, 'max': quality ? 2500 : 1500};
+        //sdp = CodecsHandler.setVideoBitrates(sdp, params);
+        print("DEBUG: Modified SDP with bitrate constraints");
+      }
+      
+      // Create modified description if needed
+      RTCSessionDescription description = RTCSessionDescription(sdp, s.type);
+      
+      // Prepare to send the offer
+      print("DEBUG: Preparing to send offer");
+      var request = <String, dynamic>{};
+      request["UUID"] = remoteUuid;
+      request["description"] = {'sdp': description.sdp, 'type': description.type};
+      request["session"] = sessionId;
+      request["streamID"] = streamID + hashcode;
+      
+      if (UUID.isNotEmpty) {
+        request["from"] = UUID;
+      }
+      
+      if (usepassword) {
+        print("DEBUG: Encrypting offer");
+        List<String> encrypted = await encryptMessage(jsonEncode(request["description"]));
+        request["description"] = encrypted[0];
+        request["vector"] = encrypted[1];
+      }
+      
+      print("DEBUG: Sending offer to $remoteUuid");
+      _safeSend(jsonEncode(request));
+      print("DEBUG: Offer sent successfully");
+      
+    } catch (e) {
+      print("ERROR: Failed to create/send offer: $e");
+      _handleBye(remoteUuid);
+    }
+  } catch (e) {
+    print("FATAL ERROR: _createPeerConnectionAndOffer failed: $e");
+    _handleBye(remoteUuid);
+  }
+}
+  // Helper to handle remote ICE candidates
+  Future<void> _handleRemoteCandidate(
+      String remoteUuid, Map<String, dynamic> mapData) async {
+    var pc = _sessions[remoteUuid];
+    if (pc == null ||
+        pc.signalingState == RTCSignalingState.RTCSignalingStateClosed) {
+      // print("Received candidate for unknown or closed session: $remoteUuid. Ignoring."); // Can be noisy
+      return;
+    }
 
-			if (mapData['description']['type'] == "offer") {
-			  _createAnswer(mapData['UUID']);
-			} 
-		  } catch (e) {
-			print('Error setting remote description: ${e.toString()}');
-		  }
-		});
-      } else {
-        // This is an answer, schedule setRemoteDescription on the main thread
-        Future.delayed(Duration.zero, () async {
+    dynamic candidatesData = mapData.containsKey('candidate')
+        ? mapData['candidate']
+        : mapData['candidates'];
+
+    // Decrypt if necessary
+    if (usepassword && mapData.containsKey('vector')) {
+      try {
+        String decryptedJson =
+            await decryptMessage(candidatesData as String, mapData['vector']);
+        candidatesData =
+            jsonDecode(decryptedJson); // Decode JSON after decryption
+        // print("Decrypted remote candidate(s) from $remoteUuid."); // Can be noisy
+      } catch (e) {
+        print("Error decrypting candidate(s) from $remoteUuid: $e. Aborting.");
+        return;
+      }
+    }
+
+    List<Map<dynamic, dynamic>> candidateList = [];
+    if (candidatesData is Map) {
+      candidateList
+          .add(Map<dynamic, dynamic>.from(candidatesData)); // Single candidate
+    } else if (candidatesData is List) {
+      candidateList = candidatesData
+          .map((c) => Map<dynamic, dynamic>.from(c))
+          .toList(); // List of candidates
+    } else {
+      print("Invalid candidate format received from $remoteUuid. Ignoring.");
+      return;
+    }
+
+    // Process each candidate
+    for (var candidateMap in candidateList) {
+      if (candidateMap['candidate'] == null || candidateMap['sdpMid'] == null) {
+        print(
+            "Invalid candidate structure in list from $remoteUuid. Skipping.");
+        continue;
+      }
+      try {
+        // sdpMLineIndex is often nullable or not used in newer WebRTC versions with unified-plan
+        RTCIceCandidate candidate = RTCIceCandidate(
+            candidateMap['candidate'],
+            candidateMap['sdpMid'],
+            candidateMap[
+                'sdpMLineIndex'] // Pass null if not present, library handles it
+            );
+
+        // Add candidate, schedule on microtask queue to avoid blocking
+        Future.microtask(() async {
           try {
-            await _sessions[mapData['UUID']].setRemoteDescription(
-                RTCSessionDescription(mapData['description']['sdp'],
-                    mapData['description']['type']));
+            if (_sessions.containsKey(remoteUuid) &&
+                _sessions[remoteUuid]!.signalingState !=
+                    RTCSignalingState.RTCSignalingStateClosed) {
+              // print("Adding candidate for $remoteUuid: ${candidate.candidate}"); // Noisy
+              await pc.addCandidate(candidate);
+            }
           } catch (e) {
-            print('Error setting remote description: ${e.toString()}');
+            // Ignore errors if PC is closed or candidate is invalid/duplicate
+            if (!e.toString().contains("closed") &&
+                !e.toString().contains("invalid")) {
+              print("ERROR adding candidate for $remoteUuid: $e");
+            }
           }
         });
+      } catch (e) {
+        print("Error creating RTCIceCandidate object for $remoteUuid: $e");
       }
-    } else if (mapData.containsKey('candidate')) {
-      if (usepassword && mapData.containsKey('vector')) {
-        String decryptedJson =
-            await decryptMessage(mapData['candidate'], mapData['vector']);
-        mapData['candidate'] = jsonDecode(decryptedJson); // Decode JSON here
-      }
-      var candidateMap = mapData['candidate'];
-      RTCIceCandidate candidate = RTCIceCandidate(candidateMap['candidate'],
-          candidateMap['sdpMid'], null); // flutter no longer uses that?
+    }
+  }
 
-      if (_sessions[mapData['UUID']] != null) {
-        await _sessions[mapData['UUID']].addCandidate(candidate);
+  // Helper to handle 'bye' message
+  void _handleBye(String remoteUuid) {
+    print("Handling 'bye' for session: $remoteUuid");
+    var pc = _sessions.remove(remoteUuid);
+    _sessionID.remove(remoteUuid);
+
+    if (pc != null) {
+      try {
+        pc.close(); // Close the peer connection
+        print("Closed PeerConnection for $remoteUuid.");
+      } catch (e) {
+        print("Error closing PeerConnection for $remoteUuid during bye: $e");
       }
-    } else if (mapData.containsKey('candidates')) {
-      if (usepassword && mapData.containsKey('vector')) {
-        String decryptedJson =
-            await decryptMessage(mapData['candidates'], mapData['vector']);
-        mapData['candidates'] = jsonDecode(decryptedJson); // Decode JSON here
+    }
+
+    // If this was the last peer, potentially update call state
+    if (_sessions.isEmpty) {
+      print("All peers disconnected.");
+      onCallStateChange(CallState.CallStateBye);
+    }
+  }
+
+  // Helper to send ICE candidate
+  Future<void> _sendIceCandidate(String remoteUuid, String sessionId, RTCIceCandidate candidate) async {
+		var request = <String, dynamic>{}; // Use Map literal
+		request["UUID"] = remoteUuid; // Target UUID
+		request["candidate"] = candidate.toMap(); // Use candidate's toMap method
+		request["type"] = "local"; // Indicate it's a local candidate
+		request["session"] = sessionId;
+		request["streamID"] = streamID + hashcode;
+
+		if (UUID.isNotEmpty) {
+		  request["from"] = UUID; // Our UUID if using custom WSS
+		}
+
+		// Encrypt if needed
+		if (usepassword) {
+		  try {
+			String candidateJson = jsonEncode(request["candidate"]);
+			List<String> encrypted = await encryptMessage(candidateJson);
+			request["candidate"] = encrypted[0];
+			request["vector"] = encrypted[1];
+		  } catch (e) {
+			print("Error encrypting candidate: $e");
+			return; // Don't send if encryption fails
+		  }
+		}
+
+		// print("Sending ICE candidate to $remoteUuid"); // Noisy
+		_safeSend(jsonEncode(request));
+	  }
+  
+
+Future<void> connect() async {
+    print("Starting connect() method");
+    active = true;
+    
+    // If there's no local stream, create it
+    if (_localStream == null) {
+      try {
+        print("No local stream exists, creating new stream");
+        _localStream = await createStream();
+        
+        if (_localStream == null) {
+          print("Failed to create local stream");
+          throw Exception("Failed to create local stream");
+        }
+        
+        print("Local stream created successfully with ID: ${_localStream!.id}");
+        print("Tracks in local stream:");
+        _localStream!.getTracks().forEach((track) {
+          print("- ${track.kind} track: ${track.id}, enabled: ${track.enabled}, label: ${track.label}");
+        });
+        
+        // Notify the app about the new stream
+        onLocalStream?.call(_localStream!);
+        onCallStateChange?.call(CallState.CallStateNew);
+      } catch (e) {
+        print("Error creating stream: $e");
+        active = false;
+        onSignalingStateChange(SignalingState.ConnectionError);
+        return;
       }
-      var candidateMap = mapData['candidates'];
-      for (var i = 0; i < candidateMap.length; i++) {
-        RTCIceCandidate candidate = RTCIceCandidate(
-            candidateMap[i]['candidate'],
-            candidateMap[i]['sdpMid'],
-            candidateMap[i]['sdpMLineIndex']);
-        // print(candidateMap[i]);
-        if (_sessions[mapData['UUID']] != null) {
-          await _sessions[mapData['UUID']].addCandidate(candidate);
+    } else {
+      print("Using existing local stream: ${_localStream!.id}");
+    }
+    
+    // Start connection attempts
+    reconnectionAttempt = 0;
+    await attemptConnection();
+  }
+Future<void> attemptConnection() async {
+    if (!active) {
+      print("Connect attempt aborted (active is false).");
+      return;
+    }
+
+    try {
+      _socket = SimpleWebSocket();
+
+      _socket.onOpen = () {
+        print('WebSocket connection established to $WSSADDRESS');
+        _isSocketConnected = true;
+        reconnectionAttempt = 0;
+        onSignalingStateChange(SignalingState.ConnectionOpen);
+
+        // Send initial seed/join messages
+        try {
+          var seedRequest = <String, dynamic>{
+            "request": "seed",
+            "streamID": streamID + hashcode,
+          };
+          if (UUID.isNotEmpty) seedRequest["from"] = UUID;
+          _safeSend(_encoder.convert(seedRequest));
+          print("Sent 'seed' request.");
+
+          if (roomID.isNotEmpty) {
+            var joinRequest = <String, dynamic>{
+              "request": "joinroom",
+              "roomid": roomhashcode.isNotEmpty ? roomhashcode : roomID,
+            };
+            if (UUID.isNotEmpty) joinRequest["from"] = UUID;
+            _safeSend(_encoder.convert(joinRequest));
+            print("Sent 'joinroom' request for room: ${joinRequest["roomid"]}");
+          }
+        } catch (e) {
+          print('Error sending initial seed/join requests: $e');
+        }
+      };
+
+      _socket.onMessage = (message) {
+        try {
+          onMessage(message);
+        } catch (e) {
+          print('Error processing WebSocket message: $e');
+        }
+      };
+
+      _socket.onClose = (int code, String reason) {
+        print('WebSocket connection closed. Code: $code, Reason: $reason');
+        _isSocketConnected = false;
+        if (!active) {
+          print("Ignoring onClose event as signaling is inactive.");
+          return;
+        }
+        onSignalingStateChange(SignalingState.ConnectionClosed);
+
+        if (reconnectionAttempt < maxReconnectionAttempts) {
+          int delayMs = (initialReconnectDelayMs * pow(2, reconnectionAttempt)).toInt();
+          delayMs = delayMs.clamp(initialReconnectDelayMs, maxReconnectDelayMs);
+
+          reconnectionAttempt++;
+          print('Attempting reconnection #$reconnectionAttempt in ${delayMs / 1000} seconds...');
+
+          Future.delayed(Duration(milliseconds: delayMs), () {
+            if (active) {
+              attemptConnection();
+            } else {
+              print("Reconnection attempt aborted (active is false).");
+            }
+          });
+        } else {
+          print('Max reconnection attempts reached ($maxReconnectionAttempts). Giving up.');
+          active = false;
+          onSignalingStateChange(SignalingState.ConnectionError);
+          _cleanSessions();
+        }
+      };
+
+      // Start connection
+      print("Connecting to WebSocket URL: $WSSADDRESS");
+      await _socket.connect(streamID + hashcode, WSSADDRESS, UUID);
+    } catch (e) {
+      print('WebSocket connection attempt failed: $e');
+      _socket.onClose(1006, "Connection failed");
+    }
+  }
+
+void _safeSend(String data) {
+  if (_isSocketConnected) {
+    try {
+      _socket.send(data);
+    } catch (e) {
+      print("Error sending WebSocket message: $e");
+      // Try to reconnect if sending fails
+      if (active && _isSocketConnected) {
+        _isSocketConnected = false;
+        print("WebSocket send failed. Attempting to reconnect...");
+        _socket.onClose(1006, "Send failed");
+      }
+    }
+  } else {
+    print("Cannot send message, WebSocket is not open.");
+  }
+}
+
+
+  // Optional: Connection Timeout Handling (More complex, consider carefully)
+  // Timer? _connectionTimer;
+  // void handleConnectionTimeout(String sessionId, int timeoutMs) {
+  //    _connectionTimer?.cancel();
+  //    _connectionTimer = Timer(Duration(milliseconds: timeoutMs), () {
+  //        if (_sessions.isEmpty && active) { // Check if still trying and no sessions established
+  //             print("Initial connection timeout (${timeoutMs}ms). Closing connection attempt.");
+  //             active = false;
+  //             _socket?.close(1001, "Connection Timeout");
+  //             onSignalingStateChange(SignalingState.ConnectionError);
+  //             _cleanSessions();
+  //        }
+  //    });
+  // }
+  // --- End Connection Logic ---
+
+Future<MediaStream> createStream() async {
+  print("DEBUG: Starting createStream() method");
+  print("DEBUG: Parameters - device: $deviceID, audio: $audioDeviceId, quality: $quality");
+  
+  // Create a dummy PC first for stability
+  print("DEBUG: Creating dummy PeerConnection");
+  RTCPeerConnection? dummyPC;
+  try {
+    dummyPC = await createPeerConnection({
+      'iceServers': [{'url': 'stun:stun.l.google.com:19302'}],
+    }, {});
+    print("DEBUG: Dummy PeerConnection created successfully");
+  } catch (e) {
+    print("WARNING: Failed to create dummy PeerConnection: $e");
+  }
+  
+  try {
+    // Set up resolution based on quality setting
+    String width = quality ? "1920" : "1280";
+    String height = quality ? "1080" : "720";
+    String frameRate = quality ? "30" : "30";
+    print("DEBUG: Using resolution: ${width}x${height} at ${frameRate}fps");
+    
+    late MediaStream stream;
+    
+    if (deviceID == "screen") {
+      print("DEBUG: Requesting screen sharing...");
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        'video': {
+          'mandatory': {
+            'minWidth': width,
+            'maxWidth': width,
+            'minHeight': height,
+            'maxHeight': height,
+            'maxFrameRate': frameRate,
+          }
+        },
+      });
+      print("DEBUG: Screen share stream obtained with ID: ${stream.id}");
+      
+      // Add audio
+      print("DEBUG: Adding microphone audio to screen share...");
+      try {
+        Map<String, dynamic> audioConstraints = audioDeviceId == "default"
+            ? {'mandatory': {'echoCancellation': false}}
+            : {
+                'mandatory': {'echoCancellation': false},
+                'optional': [{'sourceId': audioDeviceId}]
+              };
+        print("DEBUG: Audio constraints: ${jsonEncode(audioConstraints)}");
+        
+        MediaStream audioStream = await navigator.mediaDevices.getUserMedia({
+          'audio': audioConstraints,
+          'video': false
+        });
+        print("DEBUG: Audio stream obtained for screen share");
+        
+        if (audioStream.getAudioTracks().isNotEmpty) {
+          final audioTrack = audioStream.getAudioTracks()[0];
+          print("DEBUG: Adding audio track to screen share: ${audioTrack.id}, ${audioTrack.label}");
+          stream.addTrack(audioTrack);
+          print("DEBUG: Audio track added to screen share");
+        }
+      } catch (e) {
+        print("WARNING: Failed to add audio to screen share: $e");
+      }
+    } else if (deviceID == "microphone") {
+      print("DEBUG: Requesting audio-only...");
+      Map<String, dynamic> audioConstraints = audioDeviceId == "default"
+          ? {'mandatory': {'echoCancellation': false}}
+          : {
+              'mandatory': {'echoCancellation': false},
+              'optional': [{'sourceId': audioDeviceId}]
+            };
+      print("DEBUG: Audio constraints: ${jsonEncode(audioConstraints)}");
+      
+      stream = await navigator.mediaDevices.getUserMedia({
+        'audio': audioConstraints,
+        'video': false
+      });
+      print("DEBUG: Audio-only stream obtained with ID: ${stream.id}");
+    } else {
+      print("DEBUG: Requesting camera and microphone...");
+      
+      // Determine facing mode
+      String facingMode = "";
+      if (deviceID == "front" || deviceID.contains("1") || deviceID == "user") {
+        facingMode = "user";
+      } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
+        facingMode = "environment";
+      }
+      print("DEBUG: Using facingMode: $facingMode");
+      
+      // Set up video constraints
+      Map<String, dynamic> videoConstraints = {
+        'mandatory': {
+          'minWidth': width,
+          'maxWidth': width,
+          'minHeight': height,
+          'maxHeight': height,
+          'minFrameRate': frameRate,
+          'maxFrameRate': frameRate,
+        },
+      };
+      
+      if (facingMode.isNotEmpty) {
+        videoConstraints['facingMode'] = facingMode;
+      } else {
+        videoConstraints['deviceId'] = deviceID;
+      }
+      print("DEBUG: Video constraints: ${jsonEncode(videoConstraints)}");
+      
+      // Set up audio constraints
+      Map<String, dynamic> audioConstraints = audioDeviceId == "default"
+          ? {'mandatory': {'echoCancellation': false}}
+          : {
+              'mandatory': {'echoCancellation': false},
+              'optional': [{'sourceId': audioDeviceId}]
+            };
+      print("DEBUG: Audio constraints: ${jsonEncode(audioConstraints)}");
+      
+      // Get combined stream
+      print("DEBUG: Requesting getUserMedia with audio and video");
+      stream = await navigator.mediaDevices.getUserMedia({
+        'audio': audioConstraints,
+        'video': videoConstraints
+      });
+      print("DEBUG: Camera and microphone stream obtained with ID: ${stream.id}");
+    }
+    
+    // Print stream details
+    print("DEBUG: Stream created with ID: ${stream.id}");
+    print("DEBUG: Tracks in stream:");
+    stream.getTracks().forEach((track) {
+      print("DEBUG: - ${track.kind} track: ${track.id}, enabled: ${track.enabled}, label: ${track.label}");
+    });
+    
+    // Clean up dummy PC
+    if (dummyPC != null) {
+      print("DEBUG: Closing dummy PeerConnection");
+      await dummyPC.close();
+    }
+    
+    print("DEBUG: createStream() method completed successfully");
+    return stream;
+  } catch (e) {
+    print("ERROR: createStream() failed: $e");
+    
+    // Clean up dummy PC on error
+    if (dummyPC != null) {
+      try {
+        await dummyPC.close();
+      } catch (_) {}
+    }
+    
+    throw e;
+  }
+}
+
+Future<void> _createOffer(String remoteUuid, String sessionId, RTCPeerConnection pc) async {
+  print("Creating Offer for $remoteUuid...");
+  try {
+    // Check PC state first
+    if (pc.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateClosed || 
+        pc.signalingState == RTCSignalingState.RTCSignalingStateClosed) {
+      print("Cannot create offer: PeerConnection is closed.");
+      _handleBye(remoteUuid);
+      return;
+    }
+    
+    // Create offer with constraints
+    RTCSessionDescription? offer = await pc.createOffer(_sdpConstraints);
+    if (offer == null || offer.sdp == null || offer.sdp!.isEmpty) {
+      throw Exception("Created offer is null or has empty SDP");
+    }
+    
+    // Apply bitrate modification
+    bool isHighEndDevice = await _isHighPerformanceDevice();
+    int maxBitrate = quality ? (isHighEndDevice ? 4000 : 3000) : (isHighEndDevice ? 2500 : 1800);
+    int minBitrate = quality ? 800 : 600;
+    
+    final params = {'min': minBitrate, 'max': maxBitrate};
+    print("Setting video bitrates: min=${params['min']}kbps, max=${params['max']}kbps");
+    
+    String sdp = offer.sdp!;
+   // sdp = CodecsHandler.setVideoBitrates(sdp, params);
+    
+    // Create modified offer
+    RTCSessionDescription modifiedOffer = RTCSessionDescription(sdp, offer.type);
+    
+    // Check PC state again before setting local description
+    if (pc.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateClosed || 
+        pc.signalingState == RTCSignalingState.RTCSignalingStateClosed) {
+      print("Cannot set local description: PeerConnection became closed.");
+      _handleBye(remoteUuid);
+      return;
+    }
+    
+    // Set local description
+    print("Setting local description for $remoteUuid...");
+    await pc.setLocalDescription(modifiedOffer);
+    print("Local description set for $remoteUuid.");
+    
+    // Get current description after setting
+    RTCSessionDescription? currentDescription = await pc.getLocalDescription();
+    if (currentDescription == null || currentDescription.sdp == null) {
+      throw Exception("Failed to set local description - still null after setLocalDescription");
+    }
+    
+    // Prepare offer
+    var request = <String, dynamic>{};
+    request["UUID"] = remoteUuid;
+    request["description"] = currentDescription.toMap();
+    request["session"] = sessionId;
+    request["streamID"] = streamID + hashcode;
+    if (UUID.isNotEmpty) request["from"] = UUID;
+    
+    // Encrypt if needed
+    if (usepassword) {
+      try {
+        List<String> encrypted = await encryptMessage(jsonEncode(request["description"]));
+        request["description"] = encrypted[0];
+        request["vector"] = encrypted[1];
+        print("Offer description encrypted for $remoteUuid.");
+      } catch (e) {
+        print("Error encrypting offer for $remoteUuid: $e");
+        return;
+      }
+    }
+    
+    print("Sending offer to $remoteUuid.");
+    _safeSend(jsonEncode(request));
+    
+  } catch (e) {
+    print("ERROR creating/sending offer for $remoteUuid: $e");
+    _handleBye(remoteUuid);
+  }
+}
+	
+// Helper to detect device performance capability
+Future<bool> _isHighPerformanceDevice() async {
+  // Simple heuristic: check if device has enough memory
+  // More sophisticated detection could check CPU cores, GPU, etc.
+  try {
+	if (Platform.isAndroid) {
+	  const MethodChannel channel = MethodChannel('vdoninja/device_info');
+	  final Map<String, dynamic> deviceData = await channel.invokeMapMethod('getDeviceInfo') ?? {};
+	  // RAM in MB, considering 4GB+ as high-end
+	  final int ramMB = deviceData['ramMB'] ?? 0;
+	  return ramMB >= 4000;
+	} else if (Platform.isIOS) {
+	  // iOS devices are generally high-performance
+	  // Could add more detailed detection if needed
+	  return true;
+	}
+  } catch (e) {
+	print("Error detecting device performance: $e");
+  }
+  // Default to false for safety (less demanding settings)
+  return false;
+}
+
+  Future<void> _createAnswer(
+      String remoteUuid, String sessionId, RTCPeerConnection pc) async {
+		print("Creating Answer for $remoteUuid...");
+		try {
+		  RTCSessionDescription s =
+			  await pc.createAnswer(_sdpConstraints); // Use defined constraints
+		  print("Answer created. Setting local description for $remoteUuid.");
+		  await pc.setLocalDescription(s);
+		  print("Local description set for $remoteUuid.");
+
+		  var request = <String, dynamic>{};
+		  request["UUID"] = remoteUuid; // Target
+		  request["description"] = s.toMap(); // Use toMap()
+		  request["session"] = sessionId;
+		  request["streamID"] = streamID + hashcode;
+		  if (UUID.isNotEmpty) request["from"] = UUID; // Sender
+
+		  // Encrypt if needed
+		  if (usepassword) {
+			try {
+			  List<String> encrypted =
+				  await encryptMessage(jsonEncode(request["description"]));
+			  request["description"] = encrypted[0];
+			  request["vector"] = encrypted[1];
+			  print("Answer description encrypted for $remoteUuid.");
+			} catch (e) {
+			  print("Error encrypting answer for $remoteUuid: $e");
+			  return;
+			}
+		  }
+
+		  print("Sending answer to $remoteUuid.");
+		  _safeSend(jsonEncode(request));
+		} catch (e) {
+		  print("ERROR creating/sending answer for $remoteUuid: $e");
+		  // Handle error, maybe close connection?
+		  _handleBye(remoteUuid);
+		}
+  }
+  // --- End PeerConnection Offer/Answer Logic ---
+
+  // --- Data Channel Methods (Keep stubs if not used, or implement fully) ---
+  Future<void> _createDataChannel(RTCPeerConnection pc, String label) async {
+    print("Attempting to create data channel '$label'...");
+    try {
+      RTCDataChannelInit dataChannelDict = RTCDataChannelInit()
+        ..ordered = true; // Example: Set options if needed
+      // ..maxRetransmits = 30;
+      RTCDataChannel channel =
+          await pc.createDataChannel(label, dataChannelDict);
+      print("Data channel '$label' created with ID: ${channel.id}");
+      _addDataChannel(channel); // Setup handlers
+      onDataChannel?.call(channel); // Notify app
+    } catch (e) {
+      print("Error creating data channel '$label': $e");
+    }
+  }
+
+	void _addDataChannel(RTCDataChannel channel) {
+	  print("Adding handlers for data channel '${channel.label}' (ID: ${channel.id})");
+	  
+	  try {
+		channel.onDataChannelState = (state) {
+		  print("Data channel '${channel.label}' state changed: $state");
+		};
+		
+		channel.onMessage = (RTCDataChannelMessage data) {
+		  print("Message received on data channel '${channel.label}': ${data.isBinary ? '<Binary Data>' : data.text}");
+		  onDataChannelMessage?.call(channel, data);
+		};
+	  } catch (e) {
+		print("Error setting up data channel handlers: $e");
+	  }
+	}
+
+  // --- Cleanup Logic ---
+  Future<void> _cleanSessions() async {
+    print("Cleaning up sessions and resources...");
+    active = false; // Mark as inactive
+
+    // Dispose iOS silent audio player first
+    if (Platform.isIOS) {
+      _iosSilentAudio.dispose();
+    }
+
+    try {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    } catch (e) {
+      print("Error resetting orientation preferences: $e");
+    }
+
+    // Stop and dispose local stream
+    if (_localStream != null) {
+      print("Stopping local stream tracks...");
+      final tracks = _localStream!.getTracks();
+      for (var track in tracks) {
+        try {
+          print("Stopping track: ${track.id} (${track.kind})");
+          await track.stop();
+        } catch (e) {
+          print('Error stopping local track ${track.id}: $e');
+        }
+      }
+      print("Disposing local stream...");
+      try {
+        await _localStream!.dispose();
+      } catch (e) {
+        print("Error disposing local stream: $e");
+      }
+      _localStream = null;
+    }
+
+    // Close all peer connections
+    print("Closing peer connections...");
+    List<String> sessionKeys =
+        _sessions.keys.toList(); // Copy keys before iterating
+    for (var uuid in sessionKeys) {
+      print("Closing session for UUID: $uuid");
+      var pc = _sessions.remove(uuid);
+      _sessionID.remove(uuid); // Remove session ID mapping
+      if (pc != null) {
+        // Send 'bye' message before closing (optional, best effort)
+        try {
+          var request = <String, dynamic>{};
+          request["UUID"] = uuid;
+          request["bye"] = true;
+          if (UUID.isNotEmpty) request["from"] = UUID;
+          _safeSend(jsonEncode(request)); // Send bye
+          print("Sent 'bye' to $uuid.");
+        } catch (e) {
+          print("Error sending 'bye' to $uuid: $e");
+        }
+
+        // Close the connection
+        try {
+          await pc.close();
+          print("PeerConnection closed for $uuid.");
+        } catch (e) {
+          print('Error closing PeerConnection for $uuid: $e');
         }
       }
     }
-  }
+    _sessions.clear(); // Ensure map is empty
+    _sessionID.clear();
 
-	Future<void> connect() async {
-	  try {
-		// Track reconnection attempts to implement exponential backoff
-		int reconnectionAttempt = 0;
-		const int maxReconnectionAttempts = 5;
-		
-		// Function to attempt connection with retry logic
-		Future<bool> attemptConnection() async {
-		  try {
-			if (_localStream == null || _localStream!.getTracks().isEmpty) {
-			  _localStream = await createStream(true, deviceID, audioDeviceId);
-			}
-			
-			active = true;
-			
-			if (UUID.isEmpty && (WSSADDRESS != "wss://wss.vdo.ninja:443")) {
-			  var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
-			  Random _rnd = Random();
-			  String getRandomString(int length) =>
-				  String.fromCharCodes(Iterable.generate(
-					  length, (_) => chars.codeUnitAt(_rnd.nextInt(chars.length))));
-			  UUID = getRandomString(16);
-			}
-			
-			_socket = SimpleWebSocket();
-			
-			// Set up socket handlers with improved error handling
-			_socket.onOpen = () {
-			  print('WebSocket connection established');
-			  onSignalingStateChange.call(SignalingState.ConnectionOpen);
-			  
-			  // Reset reconnection attempts on successful connection
-			  reconnectionAttempt = 0;
-			  
-			  try {
-				var request = Map();
-				request["request"] = "seed";
-				request["streamID"] = streamID + hashcode;
-				if (!UUID.isEmpty) {
-				  request["from"] = UUID;
-				}
-				_socket.send(_encoder.convert(request));
-				
-				if (roomID != "") {
-				  var request = Map();
-				  request["request"] = "joinroom";
-				  if (roomhashcode != "") {
-					request["roomid"] = roomhashcode;
-				  } else {
-					request["roomid"] = roomID;
-				  }
-				  
-				  if (!UUID.isEmpty) {
-					request["from"] = UUID;
-				  }
-				  _socket.send(_encoder.convert(request));
-				}
-			  } catch (e) {
-				print('Error sending initial requests: $e');
-			  }
-			};
-			
-			_socket.onMessage = (message) {
-			  try {
-				onMessage(_decoder.convert(message));
-			  } catch (e) {
-				print('Error processing message: $e');
-			  }
-			};
-			
-			_socket.onClose = (int code, String reason) {
-			  print('WebSocket connection closed [$code => $reason]');
-			  onSignalingStateChange.call(SignalingState.ConnectionClosed);
-			  
-			  if (active) {
-				// Calculate exponential backoff delay
-				int reconnectDelay = 1000 * pow(2, reconnectionAttempt).toInt();
-				reconnectDelay = min(reconnectDelay, 30000); // Cap at 30 seconds
-				
-				if (reconnectionAttempt < maxReconnectionAttempts) {
-				  print('Attempting reconnection #${reconnectionAttempt + 1} in ${reconnectDelay / 1000} seconds');
-				  reconnectionAttempt++;
-				  
-				  Future.delayed(Duration(milliseconds: reconnectDelay), () {
-					if (active) {
-					  attemptConnection();
-					}
-				  });
-				} else {
-				  print('Max reconnection attempts reached. Giving up.');
-				  // Notify application of permanent connection failure
-				  onSignalingStateChange.call(SignalingState.ConnectionError);
-				}
-			  }
-			};
-			
-			await _socket.connect(streamID + hashcode, WSSADDRESS, UUID);
-			return true;
-		  } catch (e) {
-			print('Connection attempt failed: $e');
-			return false;
-		  }
-		}
-		
-		// Initial connection attempt
-		await attemptConnection();
-		
-		// Set up a connection timeout detector
-		handleConnectionTimeout(UUID, 30000); // 30 second timeout
-		
-	  } catch (e) {
-		print('Error in connect method: $e');
-		active = false;
-		onSignalingStateChange.call(SignalingState.ConnectionError);
-	  }
-	}
-
-	Future<MediaStream> createStream(bool userScreen, String deviceID, String audioDeviceId) async {
-	  try {
-		String width = quality ? "1920" : "1280";
-		String height = quality ? "1080" : "720";
-		String framerate = quality ? "60" : "30";
-		late MediaStream stream;
-		
-		// Improved error handling for media access
-		Future<MediaStream?> safeMediaAccess(Future<MediaStream> Function() accessMethod, String accessType) async {
-		  try {
-			return await accessMethod();
-		  } catch (e) {
-			print('Error accessing $accessType: $e');
-			
-			// Check if the error is permission-related
-			if (e.toString().contains('permission') || 
-				e.toString().contains('denied') || 
-				e.toString().contains('access')) {
-			  print('Possible permission issue detected. Requesting permissions...');
-			  
-			  // Try requesting permissions explicitly
-			  if (accessType.contains('camera')) {
-				await Permission.camera.request();
-			  }
-			  if (accessType.contains('microphone')) {
-				await Permission.microphone.request();
-			  }
-			  
-			  // Try one more time after requesting permissions
-			  try {
-				return await accessMethod();
-			  } catch (retryError) {
-				print('Still failed after permission request: $retryError');
-				return null;
-			  }
-			}
-			return null;
-		  }
-		}
-		
-		Map<String, dynamic> getAudioConstraints(String audioDeviceId) {
-		  return {
-			'audio': {
-			  if (audioDeviceId != "default") 'optional': {'sourceId': audioDeviceId},
-			  'mandatory': {
-				'googEchoCancellation': false,
-				'echoCancellation': false,
-				'noiseSuppression': false,
-				'autoGainControl': false
-			  }
-			}
-		  };
-		}
-		
-		if (deviceID == "screen") {
-		  // Screen sharing
-		  MediaStream? displayStream = await safeMediaAccess(() => 
-			navigator.mediaDevices.getDisplayMedia({
-			  'video': {
-				'deviceId': 'broadcast',
-				'mandatory': {
-				  'width': width,
-				  'height': height,
-				  'maxWidth': width,
-				  'maxHeight': width,
-				  'frameRate': framerate
-				},
-			  },
-			}), 'screen');
-		  
-		  if (displayStream == null) {
-			throw Exception('Failed to access screen sharing');
-		  }
-		  
-		  stream = displayStream;
-		  
-		  // Add audio track separately with better error handling
-		  try {
-			MediaStream? audioStream = await safeMediaAccess(() => 
-			  navigator.mediaDevices.getUserMedia(getAudioConstraints(audioDeviceId)),
-			  'microphone');
-			  
-			if (audioStream != null && audioStream.getAudioTracks().isNotEmpty) {
-			  await stream.addTrack(audioStream.getAudioTracks()[0]);
-			}
-		  } catch (e) {
-			print('Error adding audio to screen share: $e');
-			// Continue without audio track if it fails
-		  }
-		  
-		} else if (deviceID == "microphone") {
-		  // Audio-only mode
-		  MediaStream? audioStream = await safeMediaAccess(() => 
-			navigator.mediaDevices.getUserMedia({
-			  'audio': audioDeviceId == "default"
-				? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
-				: {
-					'mandatory': {'googEchoCancellation': false, 'echoCancellation': false},
-					'optional': [{'sourceId': audioDeviceId}]
-				  },
-			  'video': false
-			}), 'microphone');
-			
-		  if (audioStream == null) {
-			throw Exception('Failed to access microphone');
-		  }
-		  
-		  stream = audioStream;
-		  
-		} else {
-		  // Camera access
-		  String facingMode;
-		  if (deviceID == "front" || deviceID.contains("1") || deviceID == "user") {
-			facingMode = 'user';
-		  } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
-			facingMode = 'environment';
-		  } else {
-			facingMode = '';
-		  }
-		  
-		  Map<String, dynamic> constraints = {
-			'audio': audioDeviceId == "default"
-			  ? {'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}}
-			  : {
-				  'optional': {'sourceId': audioDeviceId},
-				  'mandatory': {'googEchoCancellation': false, 'echoCancellation': false}
-				},
-			'video': {
-			  if (facingMode.isNotEmpty) 'facingMode': facingMode,
-			  if (facingMode.isEmpty) 'deviceId': deviceID,
-			  'mandatory': {
-				'minWidth': width,
-				'minHeight': height,
-				'frameRate': framerate
-			  }
-			}
-		  };
-		  
-		  MediaStream? cameraStream = await safeMediaAccess(() => 
-			navigator.mediaDevices.getUserMedia(constraints),
-			'camera and microphone');
-			
-		  if (cameraStream == null) {
-			throw Exception('Failed to access camera and microphone');
-		  }
-		  
-		  stream = cameraStream;
-		}
-		
-		onLocalStream?.call(stream);
-		
-		return stream;
-	  } catch (e) {
-		print('Fatal error in createStream: $e');
-		rethrow; // Let the caller handle this fatal error
-	  }
-	}
-
-  Future<void> _createDataChannel(RTCPeerConnection pc, String label) async {
-//  RTCDataChannelInit dataChannelDict = RTCDataChannelInit()
-    //	..maxRetransmits = 30;
-    //  RTCDataChannel channel = await pc.createDataChannel(label, dataChannelDict);
-//  _addDataChannel(channel);
-  }
-
-  void _addDataChannel(RTCDataChannel channel) {
-    //  channel.onDataChannelState = (state) {
-    //	print('Data channel state changed: $state');
-    //  };
-    //  channel.onMessage = (RTCDataChannelMessage data) {
-    //	onDataChannelMessage?.call(channel, data);
-    //};
-//  onDataChannel?.call(channel);
-  }
-
-  Future<void> _createOffer(String uuid) async {
-    print("CREATE OFFER");
-    try {
-      RTCSessionDescription s =
-          await _sessions[uuid].createOffer(_dcConstraints);
-      await _sessions[uuid].setLocalDescription(s);
-
-      var request = Map();
-      request["UUID"] = uuid;
-      request["description"] = {'sdp': s.sdp, 'type': s.type};
-      request["session"] = _sessionID[uuid];
-      request["streamID"] = streamID + hashcode;
-
-      if (!UUID.isEmpty) {
-        request["from"] = UUID;
+    // Close the WebSocket connection
+    if (_isSocketConnected) {
+      // <--- CHECK IF IT WAS CONNECTED BEFORE TRYING TO CLOSE
+      print("Closing WebSocket connection...");
+      try {
+        // await _socket.close(1000, "Client closed"); // See point 4 below
+        await _socket.close(); // Use close() without arguments
+        _isSocketConnected = false; // Ensure state is updated after closing
+      } catch (e) {
+        print('Error closing WebSocket: $e');
       }
-
-      if (usepassword) {
-        List<String> encrypted =
-            await encryptMessage(_encoder.convert(request["description"]));
-        request["description"] = encrypted[0];
-        request["vector"] = encrypted[1];
-      }
-
-      _socket.send(_encoder.convert(request));
-    } catch (e) {
-      print(e.toString());
+    } else {
+      print("WebSocket already closed or never connected during cleanup.");
     }
+
+    print("Cleanup complete.");
   }
-
-  Future<void> _createAnswer(String uuid) async {
-    try {
-      RTCSessionDescription s = await _sessions[uuid].createAnswer({});
-      await _sessions[uuid].setLocalDescription(s);
-
-      var request = Map();
-      request["UUID"] = uuid;
-      request["description"] = {'sdp': s.sdp, 'type': s.type};
-      request["session"] = _sessionID[uuid];
-      request["streamID"] = streamID + hashcode;
-      if (!UUID.isEmpty) {
-        request["from"] = UUID;
-      }
-
-      if (usepassword) {
-        List<String> encrypted =
-            await encryptMessage(_encoder.convert(request["description"]));
-        request["description"] = encrypted[0];
-        request["vector"] = encrypted[1];
-      }
-
-      _socket.send(_encoder.convert(request));
-    } catch (e) {
-      print(e.toString());
-    }
-  }
-
-  Future<void> _cleanSessions() async {
-	  active = false;
-	  
-	  // Ensure iOS silent audio is properly disposed
-	  if (Platform.isIOS) {
-		_iosSilentAudio.dispose();
-	  }
-	  
-	  // Add a try-catch to prevent crashes during cleanup
-	  try {
-		if (_localStream != null) {
-		  final tracks = _localStream!.getTracks();
-		  for (var track in tracks) {
-			try {
-			  await track.stop();
-			} catch (e) {
-			  print('Error stopping track: $e');
-			}
-		  }
-		  await _localStream!.dispose();
-		}
-
-		// Close all sessions safely
-		for (var entry in _sessions.entries) {
-		  try {
-			var request = Map();
-			request["UUID"] = entry.key;
-			request["bye"] = true;
-			if (!UUID.isEmpty) {
-			  request["from"] = UUID;
-			}
-			await _socket.send(_encoder.convert(request));
-			await entry.value.close();
-		  } catch (e) {
-			print('Error closing session: $e');
-		  }
-		}
-
-		// Close the websocket connection safely
-		try {
-		  await _socket.close();
-		} catch (e) {
-		  print('Error closing socket: $e');
-		}
-	  } catch (e) {
-		print('Error in _cleanSessions: $e');
-	  }
-	}
-}
+  // --- End Cleanup Logic ---
+} // End of Signaling Class

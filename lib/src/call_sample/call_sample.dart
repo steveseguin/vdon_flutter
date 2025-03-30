@@ -7,6 +7,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'dart:io';
+import 'dart:math'; // Import math for Point
+import 'dart:async';
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
@@ -28,13 +31,13 @@ class CallSample extends StatefulWidget {
       {required Key key,
       required this.streamID,
       required this.deviceID,
-	  required this.audioDeviceId,
+      required this.audioDeviceId,
       required this.roomID,
       required this.quality,
-	  required this.landscape,
-	  required this.WSSADDRESS,
-	  required this.TURNSERVER,
-	  required this.password,
+      required this.landscape,
+      required this.WSSADDRESS,
+      required this.TURNSERVER,
+      required this.password,
       required this.preview,
       required this.muted,
       required this.mirrored})
@@ -44,546 +47,1025 @@ class CallSample extends StatefulWidget {
   _CallSampleState createState() => _CallSampleState();
 }
 
-
-
 class _CallSampleState extends State<CallSample> {
-  late Signaling _signaling;
+  Signaling? _signaling;
   List<dynamic> _peers = [];
   var _selfId = "";
   RTCVideoRenderer _localRenderer = RTCVideoRenderer();
-  RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  RTCVideoRenderer _remoteRenderer =
+      RTCVideoRenderer(); // Keep if needed for remote views
   bool _inCalling = false;
   bool muted = false;
   bool torch = false;
+  bool videoMuted = false;
   bool preview = true;
   bool mirrored = true;
-  double totalZoomLevel = 1.0;
-  
+  bool _showViewLink = true;
+  bool _hasViewers = false;
+
+  // --- Pinch to Zoom State ---
+  double _currentZoom = 1.0;
+  double _baseScaleFactor = 1.0;
+  static const double _maxZoom = 10.0; // Define a maximum zoom level
+  // --------------------------
+
+  Offset? _focusPoint;
+  bool _focusPointVisible = false;
+  Timer? _focusPointTimer; // Timer to hide the focus indicator
+
   _CallSampleState();
 
   @override
   initState() {
     super.initState();
     initRenderers();
+    // Apply initial state from widget properties
+    preview = widget.preview;
+    muted = widget.muted;
+    mirrored = widget.mirrored;
+    // --- Initialize Zoom ---
+    _currentZoom = 1.0; // Start at no zoom
+    // -----------------------
     _connect();
   }
-  
 
   initRenderers() async {
     await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
+    await _remoteRenderer.initialize(); // Keep if needed
   }
 
   @override
   deactivate() {
-    super.deactivate();
-	_signaling.close();
-    _localRenderer.dispose();
-    _remoteRenderer.dispose();
-	
-	SystemChrome.setPreferredOrientations([
-		DeviceOrientation.landscapeRight,
-		DeviceOrientation.landscapeLeft,
-		DeviceOrientation.portraitUp,
-		DeviceOrientation.portraitDown,
-	  ]);
+    _zoomDebounceTimer?.cancel();
+    _focusPointTimer?.cancel();
+
+    try {
+      _signaling?.close(); // Add null check
+    } catch (e) {
+      print("Error closing signaling: $e");
+    }
+    try {
+      _localRenderer.dispose();
+    } catch (e) {
+      print("Error disposing local renderer: $e");
+    }
+    try {
+      _remoteRenderer.dispose();
+    } catch (e) {
+      print("Error disposing remote renderer: $e");
+    }
+
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
   }
 
-  void _connect() async {
-  
-		if (widget.landscape){
-			SystemChrome.setPreferredOrientations([
-				  DeviceOrientation.landscapeRight,
-				  DeviceOrientation.landscapeLeft,
-			  ]);
-		}
-  
-		 var TURNLIST = [
-			  {'url': 'stun:stun.l.google.com:19302'},
-			  {
-				'url': 'turn:turn-use1.vdo.ninja:3478',
-				'username': 'vdoninja',
-				'credential': 'EastSideRepresentZ'
-			  },
-			  {
-				'url': 'turns:www.turn.vdo.ninja:443',
-				'username': 'vdoninja',
-				'credential': 'IchBinSteveDerNinja'
-			  }
-		  ];
-  
-		if (widget.TURNSERVER=="" || widget.TURNSERVER == "un;pw;turn:turn.x.co:3478"){ // assume they are using the defaults
-			  try {
-				final uri = await Uri.parse("https://turnservers.vdo.ninja/?flutter="+DateTime.now().microsecondsSinceEpoch.toString());
-				final response = await http.get(uri);
-				print("-----------------------------------");
-				if (response.statusCode == 200){
-					var TURNLIST = jsonDecode(response.body)['servers'];
-					TURNLIST.add({'url': 'stun:stun.l.google.com:19302'});
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-				} else {
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-				}
-			  } on Exception catch (_) {
-					print("using default hard coded turn list");
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-			  }
-		  } else if (widget.TURNSERVER.startsWith("https://") || widget.TURNSERVER.startsWith("http://")){ // assume they are using the defaults
-			  try {
-				final uri = await Uri.parse(widget.TURNSERVER);
-				final response = await http.get(uri); 
-				if (response.statusCode == 200){
-					var TURNLIST = jsonDecode(response.body)['servers'];
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-				} else {
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-				}
-			  } on Exception catch (_) {
-					print("using default hard coded turn list");
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-			  } 
-		  } else {
-				var customturn = widget.TURNSERVER.split(";");
-				
-				if (customturn.length==3){
-					var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
-					TURNLIST.add({
-						'url': customturn[2],
-						'username': customturn[0],
-						'credential': customturn[1]
-					  });
-					  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-				} else if (customturn.length==1){
-					
-					if (customturn[0].startsWith("stun:")){
-						var TURNLIST  = [{'url': customturn[0]}];
-						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-					} else if (customturn[0].startsWith("turn:")){
-						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
-						TURNLIST.add({
-							'url': customturn[0]
-						  });
-						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-					} else if (customturn[0].startsWith("turns:")){
-						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
-						TURNLIST.add({
-							'url': customturn[0]
-						  });
-						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-					} else if (customturn[0]=="false" || customturn[0]=="0" || customturn[0]=="off" || customturn[0]=="none"){
-						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
-						_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-					} else {
-						var TURNLIST  = [{'url': 'stun:stun.l.google.com:19302'}];
-						TURNLIST.add({
-							'url': customturn[0]
-						  });
-						  _signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-					}
-				} else{
-					_signaling = await Signaling(widget.streamID, widget.deviceID, widget.audioDeviceId, widget.roomID, widget.quality, widget.WSSADDRESS, TURNLIST, widget.password);
-				}
-		  }
-  
-      _signaling.connect();
 
-      _signaling.onSignalingStateChange = (SignalingState state) {
-        switch (state) {
-          case SignalingState.ConnectionClosed:
-          case SignalingState.ConnectionError:
-          case SignalingState.ConnectionOpen:
-            break;
-        }
-      };
+	Widget _buildVideoRenderer() {
+	  // Choose the renderer based on platform and add performance optimizations
+	  if (Platform.isIOS) {
+		return RTCVideoPlatFormView(
+		  onViewReady: (RTCVideoPlatformViewController controller) {
+			// Apply the stream source to the platform view controller
+			controller.srcObject = _localRenderer.srcObject;
+			
+			print("iOS RTCVideoPlatFormView ready with optimizations.");
+		  },
+		  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+		  mirror: _shouldMirror(), // Use helper function for mirroring logic
+		);
+	  } else {
+		return RTCVideoView(
+		  _localRenderer,
+		  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+		  mirror: _shouldMirror(), // Use helper function for mirroring logic
+		  filterQuality: FilterQuality.low, // Use low filter quality for better performance
+		);
+	  }
+	}
 
-      _signaling.onCallStateChange = (CallState state) {
-        switch (state) {
-          case CallState.CallStateNew:
-            setState(() {
-              _inCalling = true;
-              _localRenderer.srcObject = _signaling.getLocalStream();
-            });
-            break;
-          case CallState.CallStateBye:
-            setState(() {
-              _localRenderer.srcObject = null;
-              _remoteRenderer.srcObject = null;
-              _inCalling = false;
-            });
-            break;
-          case CallState.CallStateInvite:
-          case CallState.CallStateConnected:
-          case CallState.CallStateRinging:
-        }
-      };
 
-      _signaling.onPeersUpdate = ((event) {
-        setState(() {
-          _selfId = event['self'];
-          _peers = event['peers'];
-        });
-      });
+  // Helper function to determine if mirroring should be applied
+  bool _shouldMirror() {
+    // Mirror front camera by default, don't mirror rear camera by default.
+    // Allow user toggle (`widget.mirrored` / `mirrored` state) to override.
+    bool isRearCamera = widget.deviceID == "rear" ||
+        widget.deviceID == "environment" ||
+        widget.deviceID.contains("0"); // Common identifiers for rear
 
-      _signaling.onLocalStream = ((stream) {
-        print("LOCAL STREAM");
-        _localRenderer.srcObject = stream;
-        setState(() {});
-      });
-
-      _signaling.onAddRemoteStream = ((stream) {
-        _remoteRenderer.srcObject = stream;
-      });
-
-      _signaling.onRemoveRemoteStream = ((stream) {
-        _remoteRenderer.srcObject = null;
-      });
-    
+    return isRearCamera ? !mirrored : mirrored;
   }
 
-  _invitePeer(BuildContext context, String peerId, bool useScreen) async {
-    if (peerId != _selfId) {
-      _signaling.invite(peerId, 'video', useScreen);
+  void _toggleViewLink() {
+    if (mounted) {
+      setState(() {
+        _showViewLink = !_showViewLink;
+      });
+      print("View link visibility toggled: $_showViewLink");
     }
   }
 
+  void _connect() async {
+    if (widget.landscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.landscapeLeft,
+      ]);
+    } else {
+      // Explicitly allow portrait if not landscape
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation
+            .landscapeRight, // Still allow landscape if user rotates
+        DeviceOrientation.landscapeLeft,
+      ]);
+    }
+
+    // --- TURN Server Logic ---
+    var defaultTurnList = [
+      // Keep default as fallback
+      {'url': 'stun:stun.l.google.com:19302'},
+      {
+        'url': 'turn:turn-use1.vdo.ninja:3478',
+        'username': 'vdoninja',
+        'credential': 'EastSideRepresentZ'
+      },
+      {
+        'url': 'turns:www.turn.vdo.ninja:443',
+        'username': 'vdoninja',
+        'credential': 'IchBinSteveDerNinja'
+      }
+    ];
+
+    // Use List<Map<String, dynamic>> initially to avoid casting errors during parsing
+    List<Map<String, dynamic>> parsedTurnList = [];
+
+    // Helper function to process fetched servers
+    void processFetchedServers(List<dynamic> fetchedServers) {
+      parsedTurnList.clear(); // Clear previous results
+      parsedTurnList.add(
+          {'url': 'stun:stun.l.google.com:19302'}); // Always add default STUN
+
+      for (var serverData in fetchedServers) {
+        if (serverData is Map) {
+          final serverMap = Map<String, dynamic>.from(serverData);
+          final username = serverMap['username'] as String?;
+          final credential = serverMap['credential'] as String?;
+
+          if (serverMap.containsKey('url') && serverMap['url'] is String) {
+            // Handle single 'url'
+            parsedTurnList.add({
+              'url': serverMap['url'] as String,
+              if (username != null) 'username': username,
+              if (credential != null) 'credential': credential,
+            });
+          } else if (serverMap.containsKey('urls')) {
+            // Handle 'urls' list
+            final urlsValue = serverMap['urls'];
+            List<String> urls = [];
+            if (urlsValue is String) {
+              // Handle case where 'urls' is accidentally a single string
+              urls.add(urlsValue);
+            } else if (urlsValue is List) {
+              // Safely convert list elements to strings
+              urls = urlsValue.map((u) => u.toString()).toList();
+            }
+
+            for (String url in urls) {
+              parsedTurnList.add({
+                'url': url,
+                if (username != null) 'username': username,
+                if (credential != null) 'credential': credential,
+              });
+            }
+          }
+        }
+      }
+      print("Processed ${parsedTurnList.length} TURN/STUN server entries.");
+    }
+
+    if (widget.TURNSERVER == "" ||
+        widget.TURNSERVER == "un;pw;turn:turn.x.co:3478") {
+      try {
+        final uri = Uri.parse("https://turnservers.vdo.ninja/?flutter=" +
+            DateTime.now().microsecondsSinceEpoch.toString());
+        final response = await http.get(uri);
+        print("Fetching TURN servers from vdo.ninja...");
+        if (response.statusCode == 200) {
+          var fetchedTurnListDynamic = jsonDecode(response.body)['servers'];
+          if (fetchedTurnListDynamic is List) {
+            processFetchedServers(fetchedTurnListDynamic); // Use the helper
+            print("Using fetched TURN servers from vdo.ninja.");
+          } else {
+            print("Fetched TURN server data is not a list, using defaults.");
+            parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+          }
+        } else {
+          print(
+              "Failed to fetch TURN servers (Status ${response.statusCode}), using defaults.");
+          parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+        }
+      } on Exception catch (e) {
+        print(
+            "Error fetching TURN servers ($e), using default hardcoded list.");
+        parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+        print("Caught error: $e");
+      }
+    } else if (widget.TURNSERVER.startsWith("https://") ||
+        widget.TURNSERVER.startsWith("http://")) {
+      try {
+        final uri = Uri.parse(widget.TURNSERVER);
+        final response = await http.get(uri);
+        print("Fetching TURN servers from custom URL: ${widget.TURNSERVER}");
+        if (response.statusCode == 200) {
+          var fetchedTurnListDynamic = jsonDecode(response.body)['servers'];
+          if (fetchedTurnListDynamic is List) {
+            processFetchedServers(fetchedTurnListDynamic); // Use the helper
+            print("Using fetched TURN servers from custom URL.");
+          } else {
+            print(
+                "Fetched TURN server data from custom URL is not a list, using defaults.");
+            parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+          }
+        } else {
+          print(
+              "Failed to fetch TURN servers from custom URL (Status ${response.statusCode}), using defaults.");
+          parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+        }
+      } on Exception catch (e) {
+        print(
+            "Error fetching TURN servers from custom URL ($e), using default hardcoded list.");
+        parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+      }
+    } else {
+      // --- Custom TURN string parsing ---
+      print("Parsing custom TURN string: ${widget.TURNSERVER}");
+      var customturn = widget.TURNSERVER.split(";");
+      // Start with default STUN
+      parsedTurnList = [
+        {'url': 'stun:stun.l.google.com:19302'}
+      ];
+
+      if (customturn.length == 3 && customturn[2].isNotEmpty) {
+        // un;pw;uri
+        parsedTurnList.add({
+          'url': customturn[2],
+          'username': customturn[0],
+          'credential': customturn[1]
+        });
+        print("Using custom TURN server (with credentials).");
+      } else if (customturn.length == 1 && customturn[0].isNotEmpty) {
+        // Just URI or keyword
+        String uri = customturn[0];
+        if (uri.startsWith("turn:") || uri.startsWith("turns:")) {
+          parsedTurnList.add({'url': uri});
+          print("Using custom TURN/TURNS server (no credentials).");
+        } else if (uri.startsWith("stun:")) {
+          // Replace default STUN only if a custom one is explicitly given
+          if (parsedTurnList.isNotEmpty &&
+              parsedTurnList[0]['url'] == 'stun:stun.l.google.com:19302') {
+            parsedTurnList[0] = {'url': uri};
+          } else {
+            parsedTurnList.insert(
+                0, {'url': uri}); // Add at beginning if default was removed
+          }
+          print("Using custom STUN server: $uri");
+        } else if (["false", "0", "off", "none"].contains(uri.toLowerCase())) {
+          // Keep only the default STUN added initially
+          parsedTurnList.removeWhere(
+              (server) => server['url'] != 'stun:stun.l.google.com:19302');
+          print("Disabling TURN, using only STUN.");
+        } else {
+          // Assume it's a TURN URI without prefix if not recognized
+          parsedTurnList.add({'url': 'turn:$uri'});
+          print(
+              "Using custom TURN server (assumed 'turn:' prefix, no credentials).");
+        }
+      } else {
+        print("Invalid custom TURN format, using default TURN list.");
+        parsedTurnList = List<Map<String, dynamic>>.from(defaultTurnList);
+      }
+    }
+
+    // Ensure the final list passed to Signaling is correctly typed List<Map<String, String>>
+    List<Map<String, String>> finalTurnListForSignaling = parsedTurnList
+        .map((server) =>
+            server.map((key, value) => MapEntry(key, value.toString())))
+        .toList();
+
+    // Initialize Signaling with the processed TURN list
+    _signaling = Signaling(
+        widget.streamID,
+        widget.deviceID,
+        widget.audioDeviceId,
+        widget.roomID,
+        widget.quality,
+        widget.WSSADDRESS,
+        finalTurnListForSignaling,
+        widget.password);
+
+    // Set up callbacks
+    _signaling?.onSignalingStateChange = (SignalingState state) {
+      print('Signaling state changed: $state');
+      switch (state) {
+        case SignalingState.ConnectionClosed:
+        case SignalingState.ConnectionError:
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("Connection Lost: $state"),
+              duration: Duration(seconds: 3),
+            ));
+          }
+          break;
+        case SignalingState.ConnectionOpen:
+          if (mounted) {
+            print("Signaling connection open.");
+          }
+          break;
+      }
+    };
+
+    _signaling?.onCallStateChange = (CallState state) {
+      print('Call state changed: $state');
+      switch (state) {
+        case CallState.CallStateNew:
+          if (mounted) {
+            setState(() {
+              _inCalling = true;
+              MediaStream? localStream = _signaling?.getLocalStream();
+              if (localStream != null) {
+                _localRenderer.srcObject = localStream;
+                _applyZoom(_currentZoom);
+                print("Local stream assigned to renderer.");
+              } else {
+                print("Error: Local stream is null in CallStateNew.");
+              }
+            });
+          }
+          break;
+        case CallState.CallStateBye:
+          if (mounted) {
+            setState(() {
+              _inCalling = false;
+              _localRenderer.srcObject = null;
+              _remoteRenderer.srcObject = null;
+            });
+          }
+          break;
+        case CallState.CallStateInvite:
+        case CallState.CallStateConnected:
+          print("Call connected.");
+          break;
+        case CallState.CallStateRinging:
+          break;
+      }
+    };
+
+    _signaling?.onPeersUpdate = ((event) {
+      if (mounted) {
+        setState(() {
+          _selfId = event['self'];
+          _peers = event['peers'];
+
+          // Auto-hide view link when someone connects
+          if (_peers.length > 0 && _showViewLink && !_hasViewers) {
+            _showViewLink = false;
+            _hasViewers = true;
+            print("Auto-hiding view link due to viewer connection");
+          }
+        });
+      }
+    });
+
+    _signaling?.onLocalStream = ((stream) {
+      print("Local stream received in callback.");
+      if (mounted) {
+        _localRenderer.srcObject = stream;
+        _applyZoom(_currentZoom);
+        setState(() {});
+      }
+    });
+
+    _signaling?.onAddRemoteStream = ((stream) {
+      print("Remote stream added.");
+      if (mounted) {
+        _remoteRenderer.srcObject = stream;
+        setState(() {});
+      }
+    });
+
+    _signaling?.onRemoveRemoteStream = ((stream) {
+      print("Remote stream removed.");
+      if (mounted) {
+        _remoteRenderer.srcObject = null;
+        setState(() {});
+      }
+    });
+
+    // Connect
+    await _signaling?.connect();
+    print("Signaling connect called.");
+  }
+
   _hangUp() {
-    _inCalling = false;
+    if (mounted) {
+      print("Hanging up...");
+      _signaling?.close(); // Add null check
+      _inCalling = false;
+      _currentZoom = 1.0;
 
- _signaling.close();
-    _localRenderer.dispose();
-    _remoteRenderer.dispose();
-
-    _localRenderer.srcObject = null;
-    _remoteRenderer.srcObject = null;
-	
-    Navigator.of(context).pop();
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      } else {
+        print("Cannot pop context.");
+      }
+    }
   }
 
   _switchCamera() {
-    _signaling.switchCamera();
-    
-  }
-  
-  _zoomCamera(double zoomLevel) {
-	  totalZoomLevel = totalZoomLevel-zoomLevel;
-	  if (totalZoomLevel<1.0){
-		  totalZoomLevel = 1.0;
-	  } else if (totalZoomLevel>20.0){
-		  totalZoomLevel = 20.0;
-	  }
-    _signaling.zoomCamera(totalZoomLevel);
+    if (_signaling?.active == true) {
+      // Add null check
+      print("Switching camera...");
+      _signaling?.switchCamera(); // Add null check
+      setState(() {
+        _currentZoom = 1.0;
+        _applyZoom(_currentZoom);
+      });
+    }
   }
 
-  _toggleFlashlight() async {
-    setState(() {
-      torch = !torch;
-    });
-    bool success = await _signaling.toggleTorch(torch);
-    if (!success){
+  double _lastAppliedZoom = 1.0;
+  Timer? _zoomDebounceTimer;
+  DateTime _lastZoomTime = DateTime.now();
+
+  void _handleScaleStart(ScaleStartDetails details) {
+    _baseScaleFactor = _currentZoom;
+  }
+
+  void _handleScaleUpdate(ScaleUpdateDetails details) {
+    if (_signaling?.active != true ||
+        widget.deviceID == 'screen' ||
+        widget.deviceID == 'microphone') return;
+
+    double newZoom = _baseScaleFactor * details.scale;
+    newZoom = newZoom.clamp(1.0, _maxZoom);
+
+    if (mounted) {
+      setState(() {
+        _currentZoom = newZoom;
+      });
+    }
+
+    if ((_lastAppliedZoom - newZoom).abs() > 0.1) {
+      _lastAppliedZoom = newZoom;
+
+      _zoomDebounceTimer?.cancel();
+
+      final capturedZoom = newZoom;
+
+      _zoomDebounceTimer = Timer(Duration(milliseconds: 100), () {
+        try {
+          if (_signaling?.active == true) {
+            // Add null check
+            _signaling?.zoomCamera(capturedZoom); // Add null check
+          }
+        } catch (e) {
+          print("Error applying zoom: $e");
+        }
+      });
+    }
+  }
+
+  void _applyZoom(double zoomLevel) {
+    if (mounted && _signaling?.active == true) {
+      // Add null check
+      _signaling?.zoomCamera(zoomLevel); // Add null check
+    }
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    if (_signaling?.active != true ||
+        widget.deviceID == "screen" ||
+        widget.deviceID == "microphone") return;
+
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+
+    final Offset localPosition = box.globalToLocal(details.globalPosition);
+
+    if (localPosition.dx < 0 ||
+        localPosition.dx > box.size.width ||
+        localPosition.dy < 0 ||
+        localPosition.dy > box.size.height) {
+      print("Tap outside video bounds.");
+      return;
+    }
+
+    final double x = (localPosition.dx / box.size.width).clamp(0.0, 1.0);
+    final double y = (localPosition.dy / box.size.height).clamp(0.0, 1.0);
+
+    final Point<double> normalizedPoint = Point<double>(x, y);
+
+    try {
+      _signaling?.setFocusPoint(normalizedPoint); // Add null check
+      _signaling?.setExposurePoint(normalizedPoint); // Add null check
+      print("Focus/Exposure point set.");
+    } catch (e) {
+      print("Error setting focus/exposure point: $e");
+    }
+
+    _showFocusIndicator(localPosition);
+  }
+
+  void _showFocusIndicator(Offset position) {
+    _focusPointTimer?.cancel(); // Cancel previous timer if any
+    if (mounted) {
+      setState(() {
+        _focusPoint = position;
+        _focusPointVisible = true;
+      });
+    }
+
+    // Hide the focus point indicator after a short duration
+    _focusPointTimer = Timer(Duration(seconds: 1), () {
+      if (mounted) {
         setState(() {
-          torch = false;
+          _focusPointVisible = false;
         });
+      }
+    });
+  }
+  // ------------------------------------
+
+  _toggleFlashlight() async {
+    if (_signaling?.active == true) {
+      // Add null check
+      bool newTorchState = !torch;
+      print("Toggling torch to: $newTorchState");
+      bool success = await _signaling!
+          .toggleTorch(newTorchState); // Use ! here since we checked active
+      if (mounted) {
+        setState(() {
+          torch = success ? newTorchState : false;
+        });
+        if (!success) {
+          print("Torch toggle failed or not supported.");
+        }
+      }
+    }
+  }
+
+  void _toggleMirror() {
+    if (_signaling?.active == true) {
+      // Add null check
+      setState(() {
+        mirrored = !mirrored;
+      });
+      print("Video mirroring toggled: $mirrored");
     }
   }
 
   _toggleMic() {
-    setState(() {
-      muted = !muted;
-    });
-    _signaling.muteMic();
+    if (_signaling?.active == true) {
+      // Add null check
+      setState(() {
+        muted = !muted;
+      });
+      _signaling?.muteMic(); // Add null check
+      print("Mic muted: $muted");
+    }
+  }
+
+  void _toggleVideoMute() {
+    if (_signaling?.active == true) {
+      // Add null check
+      setState(() {
+        videoMuted = !videoMuted;
+      });
+      _signaling?.toggleVideoMute(); // Add null check
+      print("Video muted: $videoMuted");
+    }
   }
 
   _togglePreview() {
-    var status = false;
+    if (_signaling?.active != true) return;
 
-    print(_localRenderer.srcObject);
-    if (_localRenderer.srcObject == null) {
-      _localRenderer.srcObject = _signaling.getLocalStream();
-      status = true;
+    bool newPreviewState = !preview;
+    print("Toggling preview to: $newPreviewState");
+
+    MediaStream? stream = _signaling?.getLocalStream(); // Add null check
+
+    if (newPreviewState) {
+      if (stream != null) {
+        _localRenderer.srcObject = stream;
+      } else {
+        print("Error: Cannot enable preview, local stream is null.");
+        return;
+      }
     } else {
       _localRenderer.srcObject = null;
-      status = false;
     }
 
-    setState(() {
-      preview = status;
-    });
+    if (mounted) {
+      setState(() {
+        preview = newPreviewState;
+      });
+    }
   }
 
-  _toggleMirror() {
-    setState(() {
-      mirrored = !mirrored;
-    });
+  _info() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        // Prepare the view link with proper hashing
+            String vdonLink = "https://vdo.ninja/?view=${widget.streamID}";
+    
+			if ((widget.password == "0") || (widget.password == "false") || (widget.password == "off") || (widget.password == "")) {
+			  vdonLink += "&p=0";
+			} else if (widget.password != "someEncryptionKey123" && widget.password.isNotEmpty) {
+			  // Add password hash when a custom password is provided
+			  if (_signaling?.hashcode?.isNotEmpty == true) {
+				vdonLink += _signaling!.hashcode;
+			  }
+			}
+			
+			if (widget.roomID.isNotEmpty) {
+			  vdonLink += "&room=${widget.roomID}";
+			  
+			}
+			
+			if (widget.WSSADDRESS != 'wss://wss.vdo.ninja:443') {
+			  vdonLink += "&wss=" + Uri.encodeComponent(widget.WSSADDRESS.replaceAll("wss://", ""));
+			}
+
+        return AlertDialog(
+          title: Text("Info & Tips"),
+          content: SingleChildScrollView(
+            child: Text(
+              "• View Link: $vdonLink\n\n"
+			  "• Share the link above to allow viewing.\n\n" +
+			  "• Quality Tips:\n" +
+			  "  - Add '&bitrate=6000' or '&codec=vp9' (or h264/av1) to the view link for potential quality changes.\n" +
+			  "  - Ensure a stable network connection.\n" +
+			  "  - Check https://docs.vdo.ninja for more parameters.",
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Copy Link'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: vdonLink));
+                Navigator.of(context).pop(); // Close dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Link copied to clipboard!')),
+                );
+              },
+            ),
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
-	_info() {
-	  showDialog(
-		context: context,
-		builder: (BuildContext context) {
-		  return Dialog(
-			backgroundColor: Colors.transparent,
-			child: Stack(
-			  children: <Widget>[
-				Positioned(
-				  top: 50,
-				  left: 20,
-				  right: 20,
-				  child: Material(
-					color: Colors.white,
-					borderRadius: BorderRadius.circular(8),
-					child: Padding(
-					  padding: const EdgeInsets.all(20.0),
-					  child: Text(
-						"&bitrate=6000 and &codec=av1 can be added to the viewer side's URL to increase quality.\n\nMore such options are listed at:\nhttps://docs.vdo.ninja",
-						style: TextStyle(color: Colors.black),
-					  ),
-					),
-				  ),
-				),
-			  ],
-			),
-		  );
-		},
-	  );
-	}
-	
   @override
   Widget build(BuildContext context) {
+    var buttonWidth = 51.0;
+    var buttonPadding = 15.0;
 
-	String tmp = "https://vdo.ninja/?v=" + widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
-	
-
-    if (widget.roomID != "") {
-      tmp = "https://vdo.ninja/?v=" +
-          widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') +
-          "&r=" +
-          widget.roomID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') +
-          "&scn";
+    if (widget.deviceID == 'microphone') {
+      buttonWidth = 60.0;
+      buttonPadding = 15.0;
     }
-	if ((widget.password == "0") || (widget.password == "false") || (widget.password == "off") || (widget.password == "")){
-		tmp += "&p=0";
-	} else if (widget.password != "someEncryptionKey123"){
-		tmp = "https://vdo.ninja/?v=" + widget.streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_') + "&p="+widget.password;
+
+    String vdonLink = "https://vdo.ninja/?view=${widget.streamID}";
+    
+	if ((widget.password == "0") || (widget.password == "false") || (widget.password == "off") || (widget.password == "")) {
+	  vdonLink += "&p=0";
+	} else if (widget.password != "someEncryptionKey123" && widget.password.isNotEmpty) {
+	  // Add password hash when a custom password is provided
+	  if (_signaling?.hashcode?.isNotEmpty == true) {
+		vdonLink += _signaling!.hashcode;
+	  }
 	}
 	
-	if ( widget.WSSADDRESS != 'wss://wss.vdo.ninja:443')
-		tmp = tmp + "&wss=" + Uri.encodeComponent(widget.WSSADDRESS.replaceAll("wss://",""));
+	if (widget.roomID.isNotEmpty) {
+	  vdonLink += "&room=${widget.roomID}";
+	  
+	}
 	
-    final vdonLink = tmp;
-    final key = new GlobalKey<ScaffoldState>();
+	if (widget.WSSADDRESS != 'wss://wss.vdo.ninja:443') {
+	  vdonLink += "&wss=" + Uri.encodeComponent(widget.WSSADDRESS.replaceAll("wss://", ""));
+	}
 
-	
+    List<Widget> buttons = [];
 
-    Widget callControls() {
-      double buttonWidth = 60;
-      List<Widget> buttons = [];
+    // --- Build Buttons (Mostly existing logic, minor adjustments) ---
+    buttons.add(
+      RawMaterialButton(
+        constraints: BoxConstraints(minWidth: buttonWidth),
+        visualDensity: VisualDensity.comfortable,
+        onPressed: _toggleMic, // Use direct function reference
+        fillColor: muted ? Colors.red : Colors.green,
+        child: Icon(muted ? Icons.mic_off : Icons.mic, color: Colors.white),
+        shape: CircleBorder(),
+        elevation: 2,
+        padding: EdgeInsets.all(buttonPadding),
+      ),
+    );
 
-      buttons.add(
-        RawMaterialButton(
-          constraints: BoxConstraints(minWidth: buttonWidth),
-          visualDensity: VisualDensity.comfortable,
-          onPressed: () => {_toggleMic()},
-          fillColor: muted ? Colors.red : Colors.green,
-          child: muted ? Icon(Icons.mic_off) : Icon(Icons.mic),
-          shape: CircleBorder(),
-          elevation: 2,
-          padding: EdgeInsets.all(15),
-        ),
-      );
-
-      if (widget.deviceID == 'microphone') {
-        //
-      } else if (widget.deviceID != 'screen') {
+    if (widget.deviceID != 'microphone') {
+      // Show video controls unless mic-only
+      if (widget.deviceID != 'screen') {
+        // Screen share doesn't have preview toggle
         buttons.add(RawMaterialButton(
           constraints: BoxConstraints(minWidth: buttonWidth),
           visualDensity: VisualDensity.comfortable,
-          onPressed: () => {_togglePreview()},
+          onPressed: _togglePreview,
           fillColor: preview ? Colors.green : Colors.red,
-          child: preview ? Icon(Icons.personal_video) : Icon(Icons.play_disabled),
+          child: Icon(preview ? Icons.visibility : Icons.visibility_off,
+              color: Colors.white), // Changed icons
           shape: CircleBorder(),
           elevation: 2,
-          padding: EdgeInsets.all(15),
-        ));
-
-        buttons.add(RawMaterialButton(
-          constraints: BoxConstraints(minWidth: buttonWidth),
-          visualDensity: VisualDensity.comfortable,
-          onPressed: () => {_switchCamera()},
-          fillColor: preview ? Colors.green : Colors.red,
-          child: Icon(Icons.cameraswitch),
-          shape: CircleBorder(),
-          elevation: 2,
-          padding: EdgeInsets.all(15),
-        ));
-
-        buttons.add(RawMaterialButton(
-          constraints: BoxConstraints(minWidth: buttonWidth),
-          visualDensity: VisualDensity.comfortable,
-          onPressed: () => {_toggleMirror()},
-          fillColor: preview ? Colors.green : Colors.red,
-          child: Icon(Icons.compare_arrows),
-          shape: CircleBorder(),
-          elevation: 2,
-          padding: EdgeInsets.all(15),
-        ));
-
-        buttons.add(RawMaterialButton(
-          constraints: BoxConstraints(minWidth: buttonWidth),
-          visualDensity: VisualDensity.comfortable,
-          onPressed: () => {_toggleFlashlight()},
-          fillColor: !torch ? Colors.red : Colors.green,
-          child: !torch ? Icon(Icons.flashlight_off) : Icon(Icons.flashlight_on),
-          shape: CircleBorder(),
-          elevation: 2,
-          padding: EdgeInsets.all(15),
+          padding: EdgeInsets.all(buttonPadding),
         ));
       }
 
       buttons.add(RawMaterialButton(
         constraints: BoxConstraints(minWidth: buttonWidth),
         visualDensity: VisualDensity.comfortable,
-        onPressed: () => {_hangUp()},
-        fillColor: Colors.red,
-        child: Icon(Icons.call_end),
+        onPressed: _toggleVideoMute,
+        fillColor: videoMuted ? Colors.red : Colors.green,
+        child: Icon(videoMuted ? Icons.videocam_off : Icons.videocam,
+            color: Colors.white),
         shape: CircleBorder(),
         elevation: 2,
-        padding: EdgeInsets.all(15),
+        padding: EdgeInsets.all(buttonPadding),
       ));
 
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(10.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: Container(
-              color: Colors.black.withAlpha(100),
-              child: SizedBox(
-                height: 80,
-                width: MediaQuery.of(context).size.width,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: buttons,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+      if (widget.deviceID != 'screen') {
+        // Screen share doesn't have camera switch/mirror/flash
+        buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: _switchCamera,
+          fillColor: Colors.blue, // Use a different color for non-state buttons
+          child: Icon(Icons.cameraswitch, color: Colors.white),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(buttonPadding),
+        ));
+
+        buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: _toggleMirror,
+          fillColor: Colors.blue,
+          // Use AutoAwesomeMotion for mirror icon or keep compare_arrows
+          child: Icon(
+              mirrored ? Icons.flip_camera_ios : Icons.flip_camera_ios_outlined,
+              color: Colors.white), // Example icons
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(buttonPadding),
+        ));
+
+        buttons.add(RawMaterialButton(
+          constraints: BoxConstraints(minWidth: buttonWidth),
+          visualDensity: VisualDensity.comfortable,
+          onPressed: _toggleFlashlight,
+          fillColor:
+              torch ? Colors.yellow : Colors.blueGrey, // More indicative colors
+          child: Icon(!torch ? Icons.flashlight_off : Icons.flashlight_on,
+              color: torch ? Colors.black : Colors.white),
+          shape: CircleBorder(),
+          elevation: 2,
+          padding: EdgeInsets.all(buttonPadding),
+        ));
+      }
     }
 
-    return Scaffold(
-      key: key,
-      extendBodyBehindAppBar: true,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(30.0), // Adjust the height as needed
-        child: SafeArea(
-          child: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leadingWidth: 120, // Adjust the width to fit both buttons and spacing
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 3.0), // Adjust left padding if necessary
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back),
-                    color: Colors.white,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                  SizedBox(width: 2), // Add spacing between the buttons
-                  IconButton(
-                    icon: Icon(Icons.info),
-                    color: Colors.white,
-                    onPressed: () => _info(),
-                  ),
-                ],
+    buttons.add(RawMaterialButton(
+      constraints: BoxConstraints(minWidth: buttonWidth),
+      visualDensity: VisualDensity.comfortable,
+      onPressed: _hangUp,
+      fillColor: Colors.redAccent, // Slightly different red
+      child: Icon(Icons.call_end, color: Colors.white),
+      shape: CircleBorder(),
+      elevation: 2,
+      padding: EdgeInsets.all(buttonPadding),
+    ));
+    // ----------------------------------------------------
+
+    Widget controlsWidget = SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(
+            10.0), // Outer padding for the whole bar from screen edges
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(50),
+          child: GestureDetector(
+            // Keep this for the dead zone
+            onTap: () {
+              // Absorbs taps on the background area.
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              // The background container
+              color: Colors.black.withOpacity(0.5),
+              // Add padding *inside* the container, around the Wrap
+              // Adjust horizontal padding for edge spacing, vertical for top/bottom space
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
+              child: Wrap(
+                // Wrap directly inside the padded container
+                alignment: WrapAlignment
+                    .center, // Center buttons horizontally on each line
+                spacing:
+                    2.0, // Horizontal space BETWEEN buttons (adjust as needed)
+                runSpacing:
+                    4.0, // Vertical space between rows if wrapping occurs
+                children: buttons, // Your list of button widgets
               ),
             ),
           ),
         ),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                alignment: Alignment.bottomCenter,
+    );
+
+    // Main return statement for build method
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(kToolbarHeight), // Standard height
+        child: SafeArea(
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leadingWidth: 120,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  widget.deviceID != 'screen'
-                      ? widget.deviceID != 'microphone'
-                          ? GestureDetector(
-                              onVerticalDragUpdate: (details) {
-                                double delta = details.primaryDelta ?? 0.0;
-                                if (delta > 0) {
-                                  // User is swiping down, zoom out
-                                  _zoomCamera(0.04); // Adjust the zoom factor as needed
-                                } else if (delta < 0) {
-                                  // User is swiping up, zoom in
-                                  _zoomCamera(-0.04); // Adjust the zoom factor as needed
-                                }
-                              },
-                              child: RTCVideoView(
-                                _localRenderer,
-                                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                                mirror: widget.deviceID == "rear" ||
-                                        widget.deviceID == "environment" ||
-                                        widget.deviceID.contains("0")
-                                    ? !mirrored
-                                    : mirrored,
-                              ),
-                            )
-                          : Container(
-                              color: Theme.of(context).canvasColor,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(20.0),
-                                    child: Text(
-                                      "Open the view link in a browser.  If it doesn't auto-play, click the page.",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white, fontSize: 20),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                      : Container(
-                          color: Theme.of(context).canvasColor,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(20.0),
-                                child: Text(
-                                  "Open the view link to see the screen's output. Permission to share the screen must be granted.",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white, fontSize: 20),
-                                ),
-                              ),
-                            ],
+                  IconButton(
+                    icon: Icon(Icons.arrow_back_ios),
+                    color: Colors.white,
+                    tooltip: "Back",
+                    onPressed: () => _hangUp(),
+                  ),
+                  SizedBox(width: 2),
+                  // Only show info button when view link is shown
+                  if (_showViewLink)
+                    IconButton(
+                      icon: Icon(Icons.info_outline),
+                      color: Colors.white,
+                      tooltip: "Info & Share Link",
+                      onPressed: _info,
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              // Only show share button when view link is shown
+              if (_showViewLink)
+                IconButton(
+                  icon: Icon(Icons.share),
+                  color: Colors.white,
+                  tooltip: "Share Link",
+                  onPressed: () {
+                    Share.share("View my stream: $vdonLink");
+                  },
+                ),
+              IconButton(
+                icon: Icon(
+                    _showViewLink ? Icons.visibility_off : Icons.visibility),
+                color: Colors.white,
+                tooltip: _showViewLink ? "Hide View Link" : "Show View Link",
+                onPressed: _toggleViewLink,
+              ),
+
+              SizedBox(
+                width: 10,
+              )
+            ],
+          ),
+        ),
+      ),
+      body: GestureDetector(
+        onScaleStart: _handleScaleStart,
+        onScaleUpdate: _handleScaleUpdate,
+        onTapDown: _handleTapDown,
+        child: Container(
+          color: Colors.black,
+          child: Center(
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                // --- Video Display Area ---
+                if (widget.deviceID != 'microphone')
+                  Positioned.fill(
+                    child: preview
+                        ? _buildVideoRenderer()
+                        : Container(
+                            color: Colors.black54,
+                            child: Center(
+                                child: Icon(Icons.visibility_off,
+                                    color: Colors.white, size: 50))),
+                  )
+                else // Mic-only specific UI
+                  Container(
+                    color: Theme.of(context).canvasColor,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Icon(Icons.mic, size: 100, color: Colors.white70),
+                          SizedBox(height: 20),
+                          Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Text(
+                              "Audio Only Mode\nOpen the view link in a browser.",
+                              textAlign: TextAlign.center,
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 18),
+                            ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // --- Screen Share Specific UI ---
+                if (widget.deviceID == 'screen')
+                  Container(
+                    color: Colors.black
+                        .withOpacity(0.3), // Dim the background slightly
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(30.0),
+                        child: Text(
+                          "Screen Sharing Active\nEnsure permissions are granted.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold),
                         ),
+                      ),
+                    ),
+                  ),
+
+                // --- Focus Indicator ---
+                if (_focusPointVisible && _focusPoint != null)
                   Positioned(
-                    top: 55,
-                    left: 0,
-                    right: 0,
+                    left: _focusPoint!.dx - 20, // Center the indicator
+                    top: _focusPoint!.dy - 20,
+                    child: IgnorePointer(
+                      // Prevent indicator from intercepting taps
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          border:
+                              Border.all(color: Colors.yellowAccent, width: 2),
+                          shape: BoxShape.circle, // Use circle shape
+                        ),
+                      ),
+                    ),
+                  ),
+
+                Positioned(
+                  top: 48,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedOpacity(
+                    opacity: _showViewLink ? 1.0 : 0.0,
+                    duration: Duration(milliseconds: 200),
                     child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+                      padding: EdgeInsets.only(
+                          top: 50, bottom: 10, left: 20, right: 20),
                       color: Colors.black.withAlpha(100),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisAlignment:
+                            MainAxisAlignment.center, // Center the text
                         children: [
                           Flexible(
                             child: GestureDetector(
                               onTap: () => {Share.share(vdonLink)},
                               child: Text(
-                                "Open URL in OBS Browser Source:\n$vdonLink",
+                                "View Link: $vdonLink",
                                 style: TextStyle(color: Colors.white),
-                                textAlign: TextAlign.right,
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ),
@@ -591,14 +1073,23 @@ class _CallSampleState extends State<CallSample> {
                       ),
                     ),
                   ),
-                  callControls(),
-                ],
-              ),
+                ),
+
+                // --- Controls ---
+                Positioned(
+                  bottom: 10,
+                  left:
+                      0, // Let the Padding inside SafeArea handle edge spacing
+                  right: 0,
+                  child: controlsWidget, // Use the revised widget
+                ),
+                // ---------------
+              ],
             ),
-          ],
+          ),
         ),
       ),
-      backgroundColor: const Color(0x000000ff),
+      backgroundColor: Colors.black, // Fallback background
     );
   }
 }

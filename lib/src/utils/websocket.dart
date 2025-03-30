@@ -15,21 +15,21 @@ class SimpleWebSocket {
     late OnCloseCallback onClose;
     SimpleWebSocket();
 	JsonEncoder _encoder = JsonEncoder();
-
+    
     connect(streamID, WSSADDRESS, UUID) async {
 		print("CONNECTING");
         try {
-			if (WSSADDRESS.startsWith("wss://")){
+			if (WSSADDRESS.startsWith("wss://")) {
 				_socket = await WebSocket.connect(WSSADDRESS);
 			} else {
 				_socket = await WebSocket.connect("wss://"+WSSADDRESS);
 			}
 			
-			var request = Map();
+			var request = <String, dynamic>{};
 			request["request"] = "seed";
 			request["streamID"] = streamID;
 			
-			if (!UUID.isEmpty){
+			if (UUID.isNotEmpty) {
 			  request["from"] = UUID;
 			}
 			
@@ -73,18 +73,18 @@ class SimpleWebSocket {
 			onClose.call(500, 'Unknown error');
 		}
     }
-
+    
     send(data) {
         if (_socket != null) {
             _socket.add(data);
             //print('send: $data');
         }
     }
-
+    
     close() {
         if (_socket != null) _socket.close();
     }
-
+    
     Future<WebSocket> _connectForSelfSignedCert(url) async {
         try {
             Random r = new Random();
@@ -95,13 +95,11 @@ class SimpleWebSocket {
                // print('SimpleWebSocket: Allow self-signed certificate => $host:$port. ');
                 return true;
             };
-
             HttpClientRequest request = await client.getUrl(Uri.parse(url)); // form the correct url here
             request.headers.add('Connection', 'Upgrade');
             request.headers.add('Upgrade', 'websocket');
             request.headers.add('Sec-WebSocket-Version', '13'); // insert the correct version here
             request.headers.add('Sec-WebSocket-Key', key.toLowerCase());
-
             HttpClientResponse response = await request.close();
             // ignore: close_sinks
             Socket socket = await response.detachSocket();
@@ -110,7 +108,6 @@ class SimpleWebSocket {
                 protocol: 'signaling',
                 serverSide: false,
             );
-
             return webSocket;
         } catch (e) {
             throw e;
