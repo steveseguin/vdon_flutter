@@ -20,6 +20,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var uploader: SampleUploader?
     
     private var frameCount: Int = 0
+    private let processingQueue = DispatchQueue(label: "io.vdo.broadcast.processing", qos: .userInitiated)
     
     var socketFilePath: String {
       let sharedContainer = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Constants.appGroupIdentifier)
@@ -62,10 +63,36 @@ class SampleHandler: RPBroadcastSampleHandler {
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         switch sampleBufferType {
         case RPSampleBufferType.video:
-            uploader?.send(sample: sampleBuffer)
-        default:
+            // Process on a dedicated queue to prevent blocking
+            processingQueue.async { [weak self] in
+                autoreleasepool {
+                    self?.uploader?.send(sample: sampleBuffer)
+                }
+            }
+        case RPSampleBufferType.audioApp:
+            // System audio from the app being recorded
+            os_log(.debug, log: broadcastLogger, "Received app audio sample")
+            // TODO: Implement audio handling
+            // For now, we're not processing audio to avoid memory pressure
+        case RPSampleBufferType.audioMic:
+            // Microphone audio (if user enabled it)
+            os_log(.debug, log: broadcastLogger, "Received mic audio sample")
+            // TODO: Implement audio handling
+        @unknown default:
             break
         }
+    }
+    
+    // Handle memory warnings
+    override func broadcastAnnotated(withApplicationInfo applicationInfo: [String : Any]) {
+        // Called when the broadcast receives annotations
+        os_log(.debug, log: broadcastLogger, "Broadcast annotated with info: %{public}s", String(describing: applicationInfo))
+    }
+    
+    // Clean up resources when under memory pressure
+    override func discardSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
+        // Called when the system needs to discard samples due to memory pressure
+        os_log(.debug, log: broadcastLogger, "Discarding sample buffer due to memory pressure")
     }
 }
 

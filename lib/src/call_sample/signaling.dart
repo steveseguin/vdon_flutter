@@ -1397,19 +1397,16 @@ void _safeSend(String data) {
   // --- End Connection Logic ---
 
 Future<MediaStream> createStream() async {
-  print("DEBUG: Starting createStream() method");
-  print("DEBUG: Parameters - device: $deviceID, audio: $audioDeviceId, quality: $quality");
+  print("Starting createStream() method");
   
   // Create a dummy PC first for stability
-  print("DEBUG: Creating dummy PeerConnection");
   RTCPeerConnection? dummyPC;
   try {
     dummyPC = await createPeerConnection({
       'iceServers': [{'url': 'stun:stun.l.google.com:19302'}],
     }, {});
-    print("DEBUG: Dummy PeerConnection created successfully");
   } catch (e) {
-    print("WARNING: Failed to create dummy PeerConnection: $e");
+    print("Failed to create dummy PeerConnection: $e");
   }
   
   try {
@@ -1417,68 +1414,69 @@ Future<MediaStream> createStream() async {
     String width = quality ? "1920" : "1280";
     String height = quality ? "1080" : "720";
     String frameRate = quality ? "30" : "30";
-    print("DEBUG: Using resolution: ${width}x${height} at ${frameRate}fps");
     
     late MediaStream stream;
     
     if (deviceID == "screen") {
-      print("DEBUG: Requesting screen sharing...");
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        'video': {
-          'mandatory': {
-            'minWidth': width,
-            'maxWidth': width,
-            'minHeight': height,
-            'maxHeight': height,
-            'maxFrameRate': frameRate,
-          }
-        },
-      });
-      print("DEBUG: Screen share stream obtained with ID: ${stream.id}");
+      print("Requesting screen sharing...");
       
-      // Add audio
-      print("DEBUG: Adding microphone audio to screen share...");
-      try {
-        Map<String, dynamic> audioConstraints = audioDeviceId == "default"
-            ? {'mandatory': {'echoCancellation': false}}
-            : {
-                'mandatory': {'echoCancellation': false},
-                'optional': [{'sourceId': audioDeviceId}]
-              };
-        print("DEBUG: Audio constraints: ${jsonEncode(audioConstraints)}");
+      // For iOS, we need to use the proper broadcast extension approach
+      if (Platform.isIOS) {
+        print("Setting up iOS screen capture with broadcast extension");
         
-        MediaStream audioStream = await navigator.mediaDevices.getUserMedia({
-          'audio': audioConstraints,
-          'video': false
+        // Request permissions first
+        await Permission.microphone.request();
+		
+		
+        
+        // IMPORTANT: When using a broadcast extension, use getDisplayMedia with 
+        // a different constraint structure that explicitly mentions the extension
+        Map<String, dynamic> screenConstraints = {
+		  'video': {
+			'deviceId': 'broadcast',
+			'mandatory': {
+			  'width': width,
+			  'height': height,
+			  'maxWidth': width,
+			  'maxHeight': width,
+			  'frameRate': frameRate
+			},
+		  },
+		};
+        
+        stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
+        
+        // Configure iOS audio session for screen sharing
+        await initializeIOSAudioSession(forScreenShare: true);
+      } else {
+        // Android/Web implementation
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          'video': {
+            'mandatory': {
+              'minWidth': width,
+              'maxWidth': width,
+              'minHeight': height,
+              'maxHeight': height,
+              'maxFrameRate': frameRate,
+            }
+          },
         });
-        print("DEBUG: Audio stream obtained for screen share");
-        
-        if (audioStream.getAudioTracks().isNotEmpty) {
-          final audioTrack = audioStream.getAudioTracks()[0];
-          print("DEBUG: Adding audio track to screen share: ${audioTrack.id}, ${audioTrack.label}");
-          stream.addTrack(audioTrack);
-          print("DEBUG: Audio track added to screen share");
-        }
-      } catch (e) {
-        print("WARNING: Failed to add audio to screen share: $e");
       }
     } else if (deviceID == "microphone") {
-      print("DEBUG: Requesting audio-only...");
+      print("Requesting audio-only...");
       Map<String, dynamic> audioConstraints = audioDeviceId == "default"
           ? {'mandatory': {'echoCancellation': false}}
           : {
               'mandatory': {'echoCancellation': false},
               'optional': [{'sourceId': audioDeviceId}]
             };
-      print("DEBUG: Audio constraints: ${jsonEncode(audioConstraints)}");
       
       stream = await navigator.mediaDevices.getUserMedia({
         'audio': audioConstraints,
         'video': false
       });
-      print("DEBUG: Audio-only stream obtained with ID: ${stream.id}");
     } else {
-      print("DEBUG: Requesting camera and microphone...");
+      print("Requesting camera and microphone...");
       
       // Determine facing mode
       String facingMode = "";
@@ -1487,7 +1485,6 @@ Future<MediaStream> createStream() async {
       } else if (deviceID == "rear" || deviceID == "environment" || deviceID.contains("0")) {
         facingMode = "environment";
       }
-      print("DEBUG: Using facingMode: $facingMode");
       
       // Set up video constraints
       Map<String, dynamic> videoConstraints = {
@@ -1506,7 +1503,6 @@ Future<MediaStream> createStream() async {
       } else {
         videoConstraints['deviceId'] = deviceID;
       }
-      print("DEBUG: Video constraints: ${jsonEncode(videoConstraints)}");
       
       // Set up audio constraints
       Map<String, dynamic> audioConstraints = audioDeviceId == "default"
@@ -1515,34 +1511,29 @@ Future<MediaStream> createStream() async {
               'mandatory': {'echoCancellation': false},
               'optional': [{'sourceId': audioDeviceId}]
             };
-      print("DEBUG: Audio constraints: ${jsonEncode(audioConstraints)}");
       
       // Get combined stream
-      print("DEBUG: Requesting getUserMedia with audio and video");
       stream = await navigator.mediaDevices.getUserMedia({
         'audio': audioConstraints,
         'video': videoConstraints
       });
-      print("DEBUG: Camera and microphone stream obtained with ID: ${stream.id}");
     }
     
     // Print stream details
-    print("DEBUG: Stream created with ID: ${stream.id}");
-    print("DEBUG: Tracks in stream:");
+    print("Stream created with ID: ${stream.id}");
+    print("Tracks in stream:");
     stream.getTracks().forEach((track) {
-      print("DEBUG: - ${track.kind} track: ${track.id}, enabled: ${track.enabled}, label: ${track.label}");
+      print("- ${track.kind} track: ${track.id}, enabled: ${track.enabled}, label: ${track.label}");
     });
     
     // Clean up dummy PC
     if (dummyPC != null) {
-      print("DEBUG: Closing dummy PeerConnection");
       await dummyPC.close();
     }
     
-    print("DEBUG: createStream() method completed successfully");
     return stream;
   } catch (e) {
-    print("ERROR: createStream() failed: $e");
+    print("createStream() failed: $e");
     
     // Clean up dummy PC on error
     if (dummyPC != null) {

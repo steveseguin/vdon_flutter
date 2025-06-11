@@ -157,6 +157,12 @@ private extension SocketConnection {
         inputStream = readStream?.takeRetainedValue()
         inputStream?.delegate = self
         inputStream?.setProperty(kCFBooleanTrue, forKey: Stream.PropertyKey(kCFStreamPropertyShouldCloseNativeSocket as String))
+        
+        // Set socket options for keep-alive
+        var keepAlive: Int32 = 1
+        var keepAliveInterval: Int32 = 30
+        setsockopt(socketHandle, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, socklen_t(MemoryLayout.size(ofValue: keepAlive)))
+        setsockopt(socketHandle, IPPROTO_TCP, TCP_KEEPINTVL, &keepAliveInterval, socklen_t(MemoryLayout.size(ofValue: keepAliveInterval)))
 
         outputStream = writeStream?.takeRetainedValue()
         outputStream?.delegate = self

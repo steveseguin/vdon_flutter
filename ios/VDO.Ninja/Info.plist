@@ -55,5 +55,14 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	
+	<key>RTCAppGroupIdentifier</key>
+	<string>group.vdo</string>
+	<key>RTCScreenSharingExtension</key>
+	<string>app.ninja.vdo.VDOBroadcastExtension</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_rtcbroadcast._tcp</string>
+	</array>
 </dict>
 </plist>

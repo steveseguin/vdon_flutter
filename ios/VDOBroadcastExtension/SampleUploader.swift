@@ -12,17 +12,27 @@ import OSLog
 
 private enum Constants {
     static let bufferMaxLength = 10240
+    static let jpegCompressionQuality: Float = 0.5 // Reduced from 1.0 to save memory
+    static let maxFrameSkip = 2 // Skip frames to reduce load
+    static let scaleFactor = 2.0 // Scale factor for resolution reduction
+    static let maxWidth = 1920 // Maximum width in pixels (1080p)
+    static let maxHeight = 1080 // Maximum height in pixels (1080p)
 }
 
 class SampleUploader {
     
-    private static var imageContext = CIContext(options: nil)
+    private static var imageContext = CIContext(options: [
+        .useSoftwareRenderer: false,
+        .priorityRequestLow: true,
+        .cacheIntermediates: false
+    ])
     
     @Atomic private var isReady = false
     private var connection: SocketConnection
   
     private var dataToSend: Data?
     private var byteIndex = 0
+    private var frameCounter = 0
   
     private let serialQueue: DispatchQueue
     
@@ -38,9 +48,17 @@ class SampleUploader {
             return false
         }
         
+        // Frame skipping to reduce load
+        frameCounter += 1
+        if frameCounter % Constants.maxFrameSkip != 0 {
+            return true
+        }
+        
         isReady = false
 
-        dataToSend = prepare(sample: buffer)
+        autoreleasepool {
+            dataToSend = prepare(sample: buffer)
+        }
         byteIndex = 0
 
         serialQueue.async { [weak self] in
@@ -105,9 +123,26 @@ private extension SampleUploader {
         
         CVPixelBufferLockBaseAddress(imageBuffer, .readOnly)
         
-        let scaleFactor = 1.0
-        let width = CVPixelBufferGetWidth(imageBuffer)/Int(scaleFactor)
-        let height = CVPixelBufferGetHeight(imageBuffer)/Int(scaleFactor)
+        // Get original dimensions
+        let originalWidth = CVPixelBufferGetWidth(imageBuffer)
+        let originalHeight = CVPixelBufferGetHeight(imageBuffer)
+        
+        // Calculate scale factor to fit within max dimensions
+        var scaleFactor = Constants.scaleFactor
+        
+        // Additional scaling if still exceeds max dimensions
+        let widthAfterScale = Double(originalWidth) / scaleFactor
+        let heightAfterScale = Double(originalHeight) / scaleFactor
+        
+        if widthAfterScale > Double(Constants.maxWidth) {
+            scaleFactor = Double(originalWidth) / Double(Constants.maxWidth)
+        }
+        if heightAfterScale > Double(Constants.maxHeight) {
+            scaleFactor = max(scaleFactor, Double(originalHeight) / Double(Constants.maxHeight))
+        }
+        
+        let width = Int(Double(originalWidth) / scaleFactor)
+        let height = Int(Double(originalHeight) / scaleFactor)
         let orientation = CMGetAttachment(buffer, key: RPVideoSampleOrientationKey as CFString, attachmentModeOut: nil)?.uintValue ?? 0
                                     
         let scaleTransform = CGAffineTransform(scaleX: CGFloat(1.0/scaleFactor), y: CGFloat(1.0/scaleFactor))
@@ -140,7 +175,7 @@ private extension SampleUploader {
             return nil
         }
       
-        let options: [CIImageRepresentationOption: Float] = [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 1.0]
+        let options: [CIImageRepresentationOption: Float] = [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: Constants.jpegCompressionQuality]
 
         return SampleUploader.imageContext.jpegRepresentation(of: image, colorSpace: colorSpace, options: options)
     }

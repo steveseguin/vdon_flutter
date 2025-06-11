@@ -15,17 +15,17 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
-		9E0DB3FB2A05544000D37EDB /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E0DB3FA2A05544000D37EDB /* ReplayKit.framework */; };
 		9E0DB3FE2A05544000D37EDB /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0DB3FD2A05544000D37EDB /* SampleHandler.swift */; };
 		9E0DB4112A05544000D37EDB /* VDOBroadcastExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9E0DB3F92A05544000D37EDB /* VDOBroadcastExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9E0DB4202A055BD800D37EDB /* SocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0DB41C2A055BD800D37EDB /* SocketConnection.swift */; };
 		9E0DB4212A055BD800D37EDB /* Atomic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0DB41D2A055BD800D37EDB /* Atomic.swift */; };
 		9E0DB4222A055BD800D37EDB /* SampleUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0DB41E2A055BD800D37EDB /* SampleUploader.swift */; };
 		9E0DB4232A055BD800D37EDB /* DarwinNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0DB41F2A055BD800D37EDB /* DarwinNotificationCenter.swift */; };
-		9E190CB62A06438E00CDC385 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E0DB3FA2A05544000D37EDB /* ReplayKit.framework */; };
-		9E190CB72A06438E00CDC385 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E0DB4062A05544000D37EDB /* UIKit.framework */; };
 		9E190CBA2A06438E00CDC385 /* BroadcastSetupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E190CB92A06438E00CDC385 /* BroadcastSetupViewController.swift */; };
 		9E190CBE2A06438E00CDC385 /* broadcast-ui.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9E190CB52A06438E00CDC385 /* broadcast-ui.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9E27B08A2DB6093A00CD3CB5 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E0DB3FA2A05544000D37EDB /* ReplayKit.framework */; };
+		9E27B08D2DB6094200CD3CB5 /* ReplayKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E0DB3FA2A05544000D37EDB /* ReplayKit.framework */; };
+		9E27B0902DB6094500CD3CB5 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E0DB4062A05544000D37EDB /* UIKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -118,7 +118,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9E0DB3FB2A05544000D37EDB /* ReplayKit.framework in Frameworks */,
+				9E27B08A2DB6093A00CD3CB5 /* ReplayKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -126,8 +126,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9E190CB62A06438E00CDC385 /* ReplayKit.framework in Frameworks */,
-				9E190CB72A06438E00CDC385 /* UIKit.framework in Frameworks */,
+				9E27B08D2DB6094200CD3CB5 /* ReplayKit.framework in Frameworks */,
+				9E27B0902DB6094500CD3CB5 /* UIKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -667,7 +667,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.40;
+				CURRENT_PROJECT_VERSION = 2.0.41;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_BITCODE = NO;
@@ -686,7 +686,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Flutter",
 				);
-				MARKETING_VERSION = 2.0.40;
+				MARKETING_VERSION = 2.0.41;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -703,7 +703,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.40;
+				CURRENT_PROJECT_VERSION = 2.0.41;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_BITCODE = NO;
@@ -722,7 +722,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Flutter",
 				);
-				MARKETING_VERSION = 2.0.40;
+				MARKETING_VERSION = 2.0.41;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -741,7 +741,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.40;
+				CURRENT_PROJECT_VERSION = 2.0.41;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -756,7 +756,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.40;
+				MARKETING_VERSION = 2.0.41;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
@@ -781,7 +781,7 @@
 				CODE_SIGN_ENTITLEMENTS = VDOBroadcastExtension/VDOBroadcastExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.40;
+				CURRENT_PROJECT_VERSION = 2.0.41;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -795,7 +795,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.40;
+				MARKETING_VERSION = 2.0.41;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.ninja.vdo.VDOBroadcastExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -819,7 +819,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.40;
+				CURRENT_PROJECT_VERSION = 2.0.41;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -834,7 +834,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.40;
+				MARKETING_VERSION = 2.0.41;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
@@ -859,7 +859,7 @@
 				CODE_SIGN_ENTITLEMENTS = "broadcast-ui/broadcast-ui.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2.0.40;
+				CURRENT_PROJECT_VERSION = 2.0.41;
 				DEVELOPMENT_TEAM = H3CKR5XB3J;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -873,7 +873,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.40;
+				MARKETING_VERSION = 2.0.41;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "app.ninja.vdo.broadcast-ui";
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -12,6 +12,13 @@
 		<string>RPBroadcastProcessModeSampleBuffer</string>
 		<key>RTCAppGroupIdentifier</key>
 		<string>group.vdo</string>
+		<key>NSProcessInfo</key>
+		<dict>
+			<key>NSSupportsAutomaticTermination</key>
+			<false/>
+			<key>NSSupportsBackgroundContinuation</key>
+			<true/>
+		</dict>
 	</dict>
 </dict>
 </plist>
