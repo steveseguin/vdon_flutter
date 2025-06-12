@@ -62,19 +62,21 @@ class SampleHandler: RPBroadcastSampleHandler {
     
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         switch sampleBufferType {
-        case RPSampleBufferType.video:
+        case .video:
             // Process on a dedicated queue to prevent blocking
+            let buffer = sampleBuffer
             processingQueue.async { [weak self] in
+                guard let self = self else { return }
                 autoreleasepool {
-                    self?.uploader?.send(sample: sampleBuffer)
+                    _ = self.uploader?.send(sample: buffer)
                 }
             }
-        case RPSampleBufferType.audioApp:
+        case .audioApp:
             // System audio from the app being recorded
             os_log(.debug, log: broadcastLogger, "Received app audio sample")
             // TODO: Implement audio handling
             // For now, we're not processing audio to avoid memory pressure
-        case RPSampleBufferType.audioMic:
+        case .audioMic:
             // Microphone audio (if user enabled it)
             os_log(.debug, log: broadcastLogger, "Received mic audio sample")
             // TODO: Implement audio handling
@@ -84,15 +86,9 @@ class SampleHandler: RPBroadcastSampleHandler {
     }
     
     // Handle memory warnings
-    override func broadcastAnnotated(withApplicationInfo applicationInfo: [String : Any]) {
+    override func broadcastAnnotated(withApplicationInfo applicationInfo: [AnyHashable : Any]) {
         // Called when the broadcast receives annotations
         os_log(.debug, log: broadcastLogger, "Broadcast annotated with info: %{public}s", String(describing: applicationInfo))
-    }
-    
-    // Clean up resources when under memory pressure
-    override func discardSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
-        // Called when the system needs to discard samples due to memory pressure
-        os_log(.debug, log: broadcastLogger, "Discarding sample buffer due to memory pressure")
     }
 }
 
