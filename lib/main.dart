@@ -196,6 +196,10 @@ String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
 String customSalt = 'vdo.ninja';
 
+// Connection mode selection
+enum ConnectionMode { standard, tiktok }
+ConnectionMode connectionMode = ConnectionMode.standard; // Default to standard
+
 String _selectedMicrophoneId = 'default';
 List<MediaDeviceInfo> _microphones = [];
 
@@ -359,6 +363,11 @@ class _MyAppState extends State<MyApp> {
     // Trim whitespace
     address = address.trim();
     
+    // If address is empty, return it as-is (don't add wss://)
+    if (address.isEmpty) {
+      return address;
+    }
+    
     // If no protocol is specified, assume wss://
     if (!address.startsWith('ws://') && !address.startsWith('wss://') && 
         !address.startsWith('http://') && !address.startsWith('https://')) {
@@ -377,6 +386,11 @@ class _MyAppState extends State<MyApp> {
 
   String _getDefaultSaltFromWSSAddress(String wssAddress) {
     try {
+      // If address is empty, return default salt
+      if (wssAddress.trim().isEmpty) {
+        return 'vdo.ninja';
+      }
+      
       // Normalize the address first
       wssAddress = _normalizeWSSAddress(wssAddress);
       
@@ -454,6 +468,15 @@ class _MyAppState extends State<MyApp> {
       customBitrate = _prefs.getInt('customBitrate') ?? 0;
     } catch (e) {}
     
+    try {
+      String? modeString = _prefs.getString('connectionMode');
+      if (modeString != null) {
+        connectionMode = modeString == 'ConnectionMode.tiktok' 
+            ? ConnectionMode.tiktok 
+            : ConnectionMode.standard;
+      }
+    } catch (e) {}
+    
     if (streamID == "") {
       var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
       Random _rnd = Random();
@@ -486,471 +509,57 @@ class _MyAppState extends State<MyApp> {
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.3),
       builder: (BuildContext context) {
-        return BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-          child: Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: EdgeInsets.zero,
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                color: ninjaDialogColor.withValues(alpha: 0.95),
-              ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    // Header
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Publishing Settings',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.close, color: Colors.white),
-                            onPressed: () => Navigator.pop(context, DialogDemoAction.cancel),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Content
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.symmetric(horizontal: 20),
-                        child: Column(
-                          children: [
-                            SizedBox(height: 20),
-                            // Stream ID TextField
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 12),
-                              child: TextField(
-                                style: TextStyle(color: Colors.white),
-                                onChanged: (String text) {
-                                  setState(() {
-                                    streamID = text;
-                                    _prefs.setString('streamID', streamID);
-                                  });
-                                },
-                                decoration: InputDecoration(
-                                  hintText: streamID,
-                                  labelText: 'Stream ID (auto-generated if empty)',
-                                  labelStyle: TextStyle(color: Colors.white70),
-                                  hintStyle: TextStyle(color: Colors.white30),
-                                  enabledBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: Colors.white30),
-                                  ),
-                                  focusedBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: ninjaAccentColor),
-                                  ),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                            
-                            // Room ID TextField
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 12),
-                              child: TextField(
-                                style: TextStyle(color: Colors.white),
-                                controller: TextEditingController()..text = roomID ?? "",
-                                onChanged: (String text) {
-                                  setState(() {
-                                    roomID = text;
-                                    _prefs.setString('roomID', roomID);
-                                  });
-                                },
-                                decoration: InputDecoration(
-                                  hintText: roomID ?? "Room name",
-                                  labelText: 'Room name (optional)',
-                                  labelStyle: TextStyle(color: Colors.white70),
-                                  hintStyle: TextStyle(color: Colors.white30),
-                                  enabledBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: Colors.white30),
-                                  ),
-                                  focusedBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: ninjaAccentColor),
-                                  ),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                            
-                            // Password TextField
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 12),
-                              child: TextField(
-                                style: TextStyle(color: Colors.white),
-                                controller: TextEditingController()..text = password ?? "",
-                                onChanged: (String textpass) {
-                                  setState(() {
-                                    password = textpass;
-                                    _prefs.setString('password', textpass);
-                                  });
-                                },
-                                decoration: InputDecoration(
-                                  hintText: password ?? "Password",
-                                  labelText: 'Password (optional)',
-                                  labelStyle: TextStyle(color: Colors.white70),
-                                  hintStyle: TextStyle(color: Colors.white30),
-                                  enabledBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: Colors.white30),
-                                  ),
-                                  focusedBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: ninjaAccentColor),
-                                  ),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                            
-                            // Microphone Dropdown
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Microphone',
-                                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: EdgeInsets.symmetric(horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.white30),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: DropdownButton<String>(
-                                      value: _selectedMicrophoneId,
-                                      dropdownColor: ninjaDialogColor,
-                                      style: TextStyle(color: Colors.white),
-                                      isExpanded: true,
-                                      underline: SizedBox(),
-                                      onChanged: (String? newValue) {
-                                        if (newValue != null) {
-                                          _prefs.setString('audioDeviceId', newValue);
-                                          setState(() {
-                                            _selectedMicrophoneId = newValue;
-                                            Navigator.pop(context);
-                                            _showAddressDialog(context);
-                                          });
-                                        }
-                                      },
-                                      items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
-                                        return DropdownMenuItem<String>(
-                                          value: device.deviceId,
-                                          child: Text(device.label, overflow: TextOverflow.ellipsis),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            
-                            // Divider
-                            Divider(color: Colors.white30, height: 32),
-                            
-                            // Quality Switch
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white10),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: SwitchListTile(
-                                title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
-                                subtitle: Text(quality ? '1920x1080 @ 30fps' : '1280x720 @ 30fps', 
-                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-                                value: quality,
-                                activeColor: ninjaAccentColor,
-                                onChanged: (bool value) {
-                                  _prefs.setBool('resolution', value);
-                                  setState(() {
-                                    quality = value;
-                                    Navigator.pop(context);
-                                    _showAddressDialog(context);
-                                  });
-                                }
-                              ),
-                            ),
-                            
-                            // Landscape Switch
-                            Container(
-                              margin: EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white10),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: SwitchListTile(
-                                title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
-                                subtitle: Text('Lock orientation to landscape mode', 
-                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-                                value: landscape,
-                                activeColor: ninjaAccentColor,
-                                onChanged: (bool value) {
-                                  _prefs.setBool('landscape', value);
-                                  setState(() {
-                                    landscape = value;
-                                    Navigator.pop(context);
-                                    _showAddressDialog(context);
-                                  });
-                                }
-                              ),
-                            ),
-                            
-                            // Advanced Settings Toggle
-                            Container(
-                              margin: EdgeInsets.only(top: 16, bottom: 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white10),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: SwitchListTile(
-                                title: const Text('Advanced Settings', style: TextStyle(color: Colors.white)),
-                                subtitle: Text('Show additional configuration options', 
-                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-                                value: advanced,
-                                activeColor: ninjaAccentColor,
-                                onChanged: (bool value) {
-                                  _prefs.setBool('advanced', value);
-                                  setState(() {
-                                    advanced = value;
-                                    Navigator.pop(context);
-                                    _showAddressDialog(context);
-                                  });
-                                }
-                              ),
-                            ),
-                            
-                            // Advanced Settings Section
-                            if (advanced) ...[
-                              SizedBox(height: 16),
-                              
-                              // WSS Address TextField
-                              Container(
-                                margin: EdgeInsets.symmetric(vertical: 12),
-                                child: TextField(
-                                  style: TextStyle(color: Colors.white),
-                                  controller: TextEditingController()..text = WSSADDRESS,
-                                  onChanged: (String text) {
-                                    setState(() {
-                                      // Normalize the address
-                                      WSSADDRESS = _normalizeWSSAddress(text);
-                                      _prefs.setString('WSSADDRESS', WSSADDRESS);
-                                      // Update custom salt based on new WSS address
-                                      customSalt = _getDefaultSaltFromWSSAddress(WSSADDRESS);
-                                      _prefs.setString('customSalt', customSalt);
-                                      Navigator.pop(context);
-                                      _showAddressDialog(context);
-                                    });
-                                  },
-                                  decoration: InputDecoration(
-                                    hintText: WSSADDRESS,
-                                    labelText: 'Handshake server',
-                                    helperText: 'e.g., wss.example.com or wss://wss.example.com:443',
-                                    helperStyle: TextStyle(color: Colors.white54),
-                                    labelStyle: TextStyle(color: Colors.white70),
-                                    hintStyle: TextStyle(color: Colors.white30),
-                                    enabledBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: Colors.white30),
-                                    ),
-                                    focusedBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: ninjaAccentColor),
-                                    ),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              
-                              // Custom Salt TextField
-                              Container(
-                                margin: EdgeInsets.symmetric(vertical: 12),
-                                child: TextField(
-                                  style: TextStyle(color: Colors.white),
-                                  controller: TextEditingController()..text = customSalt,
-                                  onChanged: (String text) {
-                                    setState(() {
-                                      customSalt = text;
-                                      _prefs.setString('customSalt', customSalt);
-                                    });
-                                  },
-                                  decoration: InputDecoration(
-                                    hintText: customSalt,
-                                    labelText: 'Custom Salt',
-                                    helperText: 'Default: Top domain from handshake server',
-                                    helperStyle: TextStyle(color: Colors.white54),
-                                    labelStyle: TextStyle(color: Colors.white70),
-                                    hintStyle: TextStyle(color: Colors.white30),
-                                    enabledBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: Colors.white30),
-                                    ),
-                                    focusedBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: ninjaAccentColor),
-                                    ),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              
-                              // TURN Server TextField
-                              Container(
-                                margin: EdgeInsets.symmetric(vertical: 12),
-                                child: TextField(
-                                  style: TextStyle(color: Colors.white),
-                                  onChanged: (String text) {
-                                    setState(() {
-                                      TURNSERVER = text;
-                                      _prefs.setString('TURNSERVER', TURNSERVER);
-                                    });
-                                  },
-                                  decoration: InputDecoration(
-                                    hintText: TURNSERVER,
-                                    labelText: 'TURN server',
-                                    labelStyle: TextStyle(color: Colors.white70),
-                                    hintStyle: TextStyle(color: Colors.white30),
-                                    enabledBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: Colors.white30),
-                                    ),
-                                    focusedBorder: UnderlineInputBorder(
-                                      borderSide: BorderSide(color: ninjaAccentColor),
-                                    ),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              
-                              // Custom Bitrate Switch
-                              Container(
-                                margin: EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.white10),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: SwitchListTile(
-                                  title: const Text('Custom bitrate', style: TextStyle(color: Colors.white)),
-                                  subtitle: Text('Override default video bitrate', 
-                                    style: TextStyle(color: Colors.white54, fontSize: 12)),
-                                  value: useCustomBitrate,
-                                  activeColor: ninjaAccentColor,
-                                  onChanged: (bool value) {
-                                    _prefs.setBool('useCustomBitrate', value);
-                                    setState(() {
-                                      useCustomBitrate = value;
-                                      Navigator.pop(context);
-                                      _showAddressDialog(context);
-                                    });
-                                  }
-                                ),
-                              ),
-                              
-                              // Custom Bitrate Input
-                              if (useCustomBitrate)
-                                Container(
-                                  margin: EdgeInsets.symmetric(vertical: 12),
-                                  child: TextField(
-                                    style: TextStyle(color: Colors.white),
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (String text) {
-                                      setState(() {
-                                        customBitrate = int.tryParse(text) ?? 0;
-                                        _prefs.setInt('customBitrate', customBitrate);
-                                      });
-                                    },
-                                    decoration: InputDecoration(
-                                      hintText: customBitrate > 0 ? customBitrate.toString() : 
-                                                (quality ? "10000" : "6000"),
-                                      labelText: 'Bitrate (kbps)',
-                                      helperText: 'Default: ${quality ? "10000" : "6000"} kbps',
-                                      helperStyle: TextStyle(color: Colors.white54),
-                                      labelStyle: TextStyle(color: Colors.white70),
-                                      hintStyle: TextStyle(color: Colors.white30),
-                                      enabledBorder: UnderlineInputBorder(
-                                        borderSide: BorderSide(color: Colors.white30),
-                                      ),
-                                      focusedBorder: UnderlineInputBorder(
-                                        borderSide: BorderSide(color: ninjaAccentColor),
-                                      ),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                            ],
-                            SizedBox(height: 20),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    // Bottom Action Buttons
-                    Container(
-                      padding: EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                child: Text('CANCEL',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  )
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.white30),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.pop(context, DialogDemoAction.cancel);
-                              }
-                            ),
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: ElevatedButton(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                child: Text('CONNECT',
-                                  style: TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  )
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: ninjaAccentColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.pop(context, DialogDemoAction.connect);
-                              }
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        return PublishingSettingsDialog(
+          initialStreamID: streamID,
+          initialRoomID: roomID,
+          initialPassword: password,
+          initialQuality: quality,
+          initialLandscape: landscape,
+          initialAdvanced: advanced,
+          initialWSSAddress: WSSADDRESS,
+          initialTurnServer: TURNSERVER,
+          initialCustomSalt: customSalt,
+          initialUseCustomBitrate: useCustomBitrate,
+          initialCustomBitrate: customBitrate,
+          initialConnectionMode: connectionMode,
+          microphones: _microphones,
+          selectedMicrophoneId: _selectedMicrophoneId,
+          onSettingsChanged: (settings) {
+            setState(() {
+              streamID = settings['streamID'];
+              roomID = settings['roomID'];
+              password = settings['password'];
+              quality = settings['quality'];
+              landscape = settings['landscape'];
+              advanced = settings['advanced'];
+              WSSADDRESS = settings['WSSADDRESS'];
+              TURNSERVER = settings['TURNSERVER'];
+              customSalt = settings['customSalt'];
+              useCustomBitrate = settings['useCustomBitrate'];
+              customBitrate = settings['customBitrate'];
+              connectionMode = settings['connectionMode'];
+              _selectedMicrophoneId = settings['selectedMicrophoneId'];
+              
+              // Save to preferences
+              _prefs.setString('streamID', streamID);
+              _prefs.setString('roomID', roomID);
+              _prefs.setString('password', password);
+              _prefs.setBool('resolution', quality);
+              _prefs.setBool('landscape', landscape);
+              _prefs.setBool('advanced', advanced);
+              
+              // Handle empty WSS address - store default instead of empty string
+              String wssToStore = WSSADDRESS.trim().isEmpty ? 'wss://wss.vdo.ninja:443' : WSSADDRESS;
+              _prefs.setString('WSSADDRESS', wssToStore);
+              
+              _prefs.setString('TURNSERVER', TURNSERVER);
+              _prefs.setString('customSalt', customSalt);
+              _prefs.setBool('useCustomBitrate', useCustomBitrate);
+              _prefs.setInt('customBitrate', customBitrate);
+              _prefs.setString('connectionMode', connectionMode.toString());
+              _prefs.setString('audioDeviceId', _selectedMicrophoneId);
+            });
+          },
         );
       },
     ).then<void>((DialogDemoAction? value) {
@@ -973,7 +582,8 @@ class _MyAppState extends State<MyApp> {
               preview: true,
               mirrored: true,
               customBitrate: useCustomBitrate ? customBitrate : 0,
-              customSalt: customSalt
+              customSalt: customSalt,
+              connectionMode: connectionMode
             )));
       }
     });
@@ -1170,6 +780,808 @@ class _MyAppState extends State<MyApp> {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank')) {
       throw Exception('Could not launch $url');
     }
+  }
+}
+
+// Publishing Settings Dialog with proper state management
+class PublishingSettingsDialog extends StatefulWidget {
+  final String initialStreamID;
+  final String initialRoomID;
+  final String initialPassword;
+  final bool initialQuality;
+  final bool initialLandscape;
+  final bool initialAdvanced;
+  final String initialWSSAddress;
+  final String initialTurnServer;
+  final String initialCustomSalt;
+  final bool initialUseCustomBitrate;
+  final int initialCustomBitrate;
+  final ConnectionMode initialConnectionMode;
+  final List<MediaDeviceInfo> microphones;
+  final String selectedMicrophoneId;
+  final Function(Map<String, dynamic>) onSettingsChanged;
+
+  const PublishingSettingsDialog({
+    Key? key,
+    required this.initialStreamID,
+    required this.initialRoomID,
+    required this.initialPassword,
+    required this.initialQuality,
+    required this.initialLandscape,
+    required this.initialAdvanced,
+    required this.initialWSSAddress,
+    required this.initialTurnServer,
+    required this.initialCustomSalt,
+    required this.initialUseCustomBitrate,
+    required this.initialCustomBitrate,
+    required this.initialConnectionMode,
+    required this.microphones,
+    required this.selectedMicrophoneId,
+    required this.onSettingsChanged,
+  }) : super(key: key);
+
+  @override
+  _PublishingSettingsDialogState createState() => _PublishingSettingsDialogState();
+}
+
+class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
+  late TextEditingController _streamIDController;
+  late TextEditingController _roomIDController;
+  late TextEditingController _passwordController;
+  late TextEditingController _wssAddressController;
+  late TextEditingController _turnServerController;
+  late TextEditingController _customSaltController;
+  late TextEditingController _customBitrateController;
+  
+  late FocusNode _wssAddressFocusNode;
+  
+  late String streamID;
+  late String roomID;
+  late String password;
+  late bool quality;
+  late bool landscape;
+  late bool advanced;
+  late String WSSADDRESS;
+  late String TURNSERVER;
+  late String customSalt;
+  late bool useCustomBitrate;
+  late int customBitrate;
+  late ConnectionMode connectionMode;
+  late String _selectedMicrophoneId;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize controllers
+    _streamIDController = TextEditingController(text: widget.initialStreamID);
+    _roomIDController = TextEditingController(text: widget.initialRoomID);
+    _passwordController = TextEditingController(text: widget.initialPassword);
+    _wssAddressController = TextEditingController(text: widget.initialWSSAddress);
+    _turnServerController = TextEditingController(text: widget.initialTurnServer);
+    _customSaltController = TextEditingController(text: widget.initialCustomSalt);
+    _customBitrateController = TextEditingController(text: widget.initialCustomBitrate > 0 ? widget.initialCustomBitrate.toString() : '');
+    
+    // Initialize focus node
+    _wssAddressFocusNode = FocusNode();
+    _wssAddressFocusNode.addListener(() {
+      if (!_wssAddressFocusNode.hasFocus) {
+        // Normalize when user leaves the field
+        setState(() {
+          WSSADDRESS = _normalizeWSSAddress(_wssAddressController.text);
+          _wssAddressController.text = WSSADDRESS;
+          
+          // Update custom salt based on normalized WSS address
+          customSalt = _getDefaultSaltFromWSSAddress(WSSADDRESS);
+          _customSaltController.text = customSalt;
+        });
+        _updateSettings();
+      }
+    });
+    
+    // Initialize state
+    streamID = widget.initialStreamID;
+    roomID = widget.initialRoomID;
+    password = widget.initialPassword;
+    quality = widget.initialQuality;
+    landscape = widget.initialLandscape;
+    advanced = widget.initialAdvanced;
+    WSSADDRESS = widget.initialWSSAddress;
+    TURNSERVER = widget.initialTurnServer;
+    customSalt = widget.initialCustomSalt;
+    useCustomBitrate = widget.initialUseCustomBitrate;
+    customBitrate = widget.initialCustomBitrate;
+    connectionMode = widget.initialConnectionMode;
+    _selectedMicrophoneId = widget.selectedMicrophoneId;
+  }
+  
+  @override
+  void dispose() {
+    _streamIDController.dispose();
+    _roomIDController.dispose();
+    _passwordController.dispose();
+    _wssAddressController.dispose();
+    _turnServerController.dispose();
+    _customSaltController.dispose();
+    _customBitrateController.dispose();
+    _wssAddressFocusNode.dispose();
+    super.dispose();
+  }
+  
+  void _updateSettings() {
+    widget.onSettingsChanged({
+      'streamID': streamID,
+      'roomID': roomID,
+      'password': password,
+      'quality': quality,
+      'landscape': landscape,
+      'advanced': advanced,
+      'WSSADDRESS': WSSADDRESS,
+      'TURNSERVER': TURNSERVER,
+      'customSalt': customSalt,
+      'useCustomBitrate': useCustomBitrate,
+      'customBitrate': customBitrate,
+      'connectionMode': connectionMode,
+      'selectedMicrophoneId': _selectedMicrophoneId,
+    });
+  }
+  
+  String _normalizeWSSAddress(String address) {
+    address = address.trim();
+    
+    // If address is empty, return it as-is (don't add wss://)
+    if (address.isEmpty) {
+      return address;
+    }
+    
+    if (!address.startsWith('ws://') && !address.startsWith('wss://') && 
+        !address.startsWith('http://') && !address.startsWith('https://')) {
+      address = 'wss://' + address;
+    }
+    
+    if (address.startsWith('http://')) {
+      address = address.replaceFirst('http://', 'ws://');
+    } else if (address.startsWith('https://')) {
+      address = address.replaceFirst('https://', 'wss://');
+    }
+    
+    return address;
+  }
+
+  String _getDefaultSaltFromWSSAddress(String wssAddress) {
+    try {
+      // If address is empty, return default salt
+      if (wssAddress.trim().isEmpty) {
+        return 'vdo.ninja';
+      }
+      
+      wssAddress = _normalizeWSSAddress(wssAddress);
+      Uri uri = Uri.parse(wssAddress);
+      String host = uri.host;
+      
+      if (host.isEmpty && wssAddress.contains('://')) {
+        String afterProtocol = wssAddress.split('://')[1];
+        host = afterProtocol.split(RegExp(r'[:/]'))[0];
+      }
+      
+      List<String> parts = host.split('.');
+      if (parts.length >= 2) {
+        String lastPart = parts[parts.length - 1];
+        String secondLastPart = parts[parts.length - 2];
+        
+        if ((lastPart.length == 2 && secondLastPart.length <= 3) || 
+            ['com', 'net', 'org', 'edu', 'gov', 'mil', 'co'].contains(secondLastPart)) {
+          if (parts.length >= 3) {
+            return '${parts[parts.length - 3]}.${secondLastPart}.${lastPart}';
+          }
+        }
+        
+        return '${secondLastPart}.${lastPart}';
+      }
+      return host.isNotEmpty ? host : 'vdo.ninja';
+    } catch (e) {
+      return 'vdo.ninja';
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            color: ninjaDialogColor.withValues(alpha: 0.95),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Publishing Settings',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context, DialogDemoAction.cancel),
+                      ),
+                    ],
+                  ),
+                ),
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        SizedBox(height: 20),
+                        // Stream ID TextField
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 12),
+                          child: TextField(
+                            style: TextStyle(color: Colors.white),
+                            controller: _streamIDController,
+                            onChanged: (String text) {
+                              setState(() {
+                                streamID = text;
+                              });
+                              _updateSettings();
+                            },
+                            decoration: InputDecoration(
+                              hintText: streamID.isEmpty ? "Auto-generated" : streamID,
+                              labelText: 'Stream ID (auto-generated if empty)',
+                              labelStyle: TextStyle(color: Colors.white70),
+                              hintStyle: TextStyle(color: Colors.white30),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.white30),
+                              ),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: ninjaAccentColor),
+                              ),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        
+                        // Room ID TextField
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 12),
+                          child: TextField(
+                            style: TextStyle(color: Colors.white),
+                            controller: _roomIDController,
+                            onChanged: (String text) {
+                              setState(() {
+                                roomID = text;
+                              });
+                              _updateSettings();
+                            },
+                            decoration: InputDecoration(
+                              hintText: "Room name",
+                              labelText: 'Room name (optional)',
+                              labelStyle: TextStyle(color: Colors.white70),
+                              hintStyle: TextStyle(color: Colors.white30),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.white30),
+                              ),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: ninjaAccentColor),
+                              ),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        
+                        // Password TextField
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 12),
+                          child: TextField(
+                            style: TextStyle(color: Colors.white),
+                            controller: _passwordController,
+                            onChanged: (String textpass) {
+                              setState(() {
+                                password = textpass;
+                              });
+                              _updateSettings();
+                            },
+                            decoration: InputDecoration(
+                              hintText: "Password",
+                              labelText: 'Password (optional)',
+                              labelStyle: TextStyle(color: Colors.white70),
+                              hintStyle: TextStyle(color: Colors.white30),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: Colors.white30),
+                              ),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(color: ninjaAccentColor),
+                              ),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        
+                        // Microphone Dropdown
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Microphone',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.white30),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: DropdownButton<String>(
+                                  value: _selectedMicrophoneId,
+                                  dropdownColor: ninjaDialogColor,
+                                  style: TextStyle(color: Colors.white),
+                                  isExpanded: true,
+                                  underline: SizedBox(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setState(() {
+                                        _selectedMicrophoneId = newValue;
+                                      });
+                                      _updateSettings();
+                                    }
+                                  },
+                                  items: widget.microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
+                                    return DropdownMenuItem<String>(
+                                      value: device.deviceId,
+                                      child: Text(device.label, overflow: TextOverflow.ellipsis),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        // Connection Mode Selection
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Connection Mode',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          connectionMode = ConnectionMode.standard;
+                                        });
+                                        _updateSettings();
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        decoration: BoxDecoration(
+                                          color: connectionMode == ConnectionMode.standard 
+                                              ? ninjaAccentColor 
+                                              : Colors.transparent,
+                                          border: Border.all(
+                                            color: connectionMode == ConnectionMode.standard 
+                                                ? ninjaAccentColor 
+                                                : Colors.white30,
+                                            width: 2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Standard Mode',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: connectionMode == ConnectionMode.standard 
+                                                ? Colors.black 
+                                                : Colors.white,
+                                            fontWeight: connectionMode == ConnectionMode.standard 
+                                                ? FontWeight.bold 
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          connectionMode = ConnectionMode.tiktok;
+                                        });
+                                        _updateSettings();
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                        decoration: BoxDecoration(
+                                          color: connectionMode == ConnectionMode.tiktok 
+                                              ? ninjaAccentColor 
+                                              : Colors.transparent,
+                                          border: Border.all(
+                                            color: connectionMode == ConnectionMode.tiktok 
+                                                ? ninjaAccentColor 
+                                                : Colors.white30,
+                                            width: 2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'TikTok WS',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: connectionMode == ConnectionMode.tiktok 
+                                                ? Colors.black 
+                                                : Colors.white,
+                                            fontWeight: connectionMode == ConnectionMode.tiktok 
+                                                ? FontWeight.bold 
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                connectionMode == ConnectionMode.standard 
+                                    ? 'Default VDO.Ninja connection (recommended)' 
+                                    : 'TikTok-optimized WebSocket connection',
+                                style: TextStyle(color: Colors.white54, fontSize: 11),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        // Divider
+                        Divider(color: Colors.white30, height: 32),
+                        
+                        // Quality Switch
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SwitchListTile(
+                            title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
+                            subtitle: Text(quality ? '1920x1080 @ 30fps' : '1280x720 @ 30fps', 
+                              style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            value: quality,
+                            activeColor: ninjaAccentColor,
+                            onChanged: (bool value) {
+                              setState(() {
+                                quality = value;
+                              });
+                              _updateSettings();
+                            }
+                          ),
+                        ),
+                        
+                        // Landscape Switch
+                        Container(
+                          margin: EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SwitchListTile(
+                            title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
+                            subtitle: Text('Lock orientation to landscape mode', 
+                              style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            value: landscape,
+                            activeColor: ninjaAccentColor,
+                            onChanged: (bool value) {
+                              setState(() {
+                                landscape = value;
+                              });
+                              _updateSettings();
+                            }
+                          ),
+                        ),
+                        
+                        // Advanced Settings Toggle
+                        Container(
+                          margin: EdgeInsets.only(top: 16, bottom: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SwitchListTile(
+                            title: const Text('Advanced Settings', style: TextStyle(color: Colors.white)),
+                            subtitle: Text('Show additional configuration options', 
+                              style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            value: advanced,
+                            activeColor: ninjaAccentColor,
+                            onChanged: (bool value) {
+                              setState(() {
+                                advanced = value;
+                              });
+                              _updateSettings();
+                            }
+                          ),
+                        ),
+                        
+                        // Advanced Settings Section
+                        if (advanced) ...[
+                          SizedBox(height: 16),
+                          
+                          // WSS Address TextField with validation
+                          Container(
+                            margin: EdgeInsets.symmetric(vertical: 12),
+                            child: TextField(
+                              style: TextStyle(color: Colors.white),
+                              controller: _wssAddressController,
+                              focusNode: _wssAddressFocusNode,
+                              onChanged: (String text) {
+                                // Store raw input without normalization during typing
+                                setState(() {
+                                  WSSADDRESS = text; // Store raw input
+                                });
+                                _updateSettings();
+                              },
+                              decoration: InputDecoration(
+                                hintText: WSSADDRESS,
+                                labelText: 'Handshake server',
+                                helperText: 'Leave empty for default. Auto-formats when you finish typing.',
+                                helperStyle: TextStyle(color: Colors.white54),
+                                labelStyle: TextStyle(color: Colors.white70),
+                                hintStyle: TextStyle(color: Colors.white30),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.white30),
+                                ),
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: ninjaAccentColor),
+                                ),
+                                errorText: _validateWSSAddress(WSSADDRESS),
+                                errorStyle: TextStyle(color: Colors.red),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          
+                          // Custom Salt TextField
+                          Container(
+                            margin: EdgeInsets.symmetric(vertical: 12),
+                            child: TextField(
+                              style: TextStyle(color: Colors.white),
+                              controller: _customSaltController,
+                              onChanged: (String text) {
+                                setState(() {
+                                  customSalt = text;
+                                });
+                                _updateSettings();
+                              },
+                              decoration: InputDecoration(
+                                hintText: customSalt,
+                                labelText: 'Custom Salt',
+                                helperText: 'Default: Top domain from handshake server',
+                                helperStyle: TextStyle(color: Colors.white54),
+                                labelStyle: TextStyle(color: Colors.white70),
+                                hintStyle: TextStyle(color: Colors.white30),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.white30),
+                                ),
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: ninjaAccentColor),
+                                ),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          
+                          // TURN Server TextField
+                          Container(
+                            margin: EdgeInsets.symmetric(vertical: 12),
+                            child: TextField(
+                              style: TextStyle(color: Colors.white),
+                              controller: _turnServerController,
+                              onChanged: (String text) {
+                                setState(() {
+                                  TURNSERVER = text;
+                                });
+                                _updateSettings();
+                              },
+                              decoration: InputDecoration(
+                                hintText: TURNSERVER,
+                                labelText: 'TURN server',
+                                labelStyle: TextStyle(color: Colors.white70),
+                                hintStyle: TextStyle(color: Colors.white30),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Colors.white30),
+                                ),
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: ninjaAccentColor),
+                                ),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          
+                          // Custom Bitrate Switch
+                          Container(
+                            margin: EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.white10),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: SwitchListTile(
+                              title: const Text('Custom bitrate', style: TextStyle(color: Colors.white)),
+                              subtitle: Text('Override default video bitrate', 
+                                style: TextStyle(color: Colors.white54, fontSize: 12)),
+                              value: useCustomBitrate,
+                              activeColor: ninjaAccentColor,
+                              onChanged: (bool value) {
+                                setState(() {
+                                  useCustomBitrate = value;
+                                });
+                                _updateSettings();
+                              }
+                            ),
+                          ),
+                          
+                          // Custom Bitrate Input with validation
+                          if (useCustomBitrate)
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 12),
+                              child: TextField(
+                                style: TextStyle(color: Colors.white),
+                                controller: _customBitrateController,
+                                keyboardType: TextInputType.number,
+                                onChanged: (String text) {
+                                  setState(() {
+                                    customBitrate = int.tryParse(text) ?? 0;
+                                  });
+                                  _updateSettings();
+                                },
+                                decoration: InputDecoration(
+                                  hintText: quality ? "10000" : "6000",
+                                  labelText: 'Bitrate (kbps)',
+                                  helperText: 'Default: ${quality ? "10000" : "6000"} kbps. Range: 100-50000',
+                                  helperStyle: TextStyle(color: Colors.white54),
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                  hintStyle: TextStyle(color: Colors.white30),
+                                  enabledBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.white30),
+                                  ),
+                                  focusedBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: ninjaAccentColor),
+                                  ),
+                                  errorText: _validateBitrate(customBitrate),
+                                  errorStyle: TextStyle(color: Colors.red),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                        ],
+                        SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Bottom Action Buttons
+                Container(
+                  padding: EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Text('CANCEL',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              )
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.white30),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context, DialogDemoAction.cancel);
+                          }
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Text('CONNECT',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              )
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ninjaAccentColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context, DialogDemoAction.connect);
+                          }
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  String? _validateWSSAddress(String address) {
+    if (address.isEmpty) return null;
+    
+    // Don't validate partial URLs during typing (less than 5 characters)
+    if (address.length < 5) return null;
+    
+    try {
+      // Try to normalize and then validate
+      String normalizedAddress = _normalizeWSSAddress(address);
+      Uri uri = Uri.parse(normalizedAddress);
+      if (uri.host.isEmpty) {
+        return 'Invalid URL format';
+      }
+      if (!['ws', 'wss'].contains(uri.scheme)) {
+        return 'URL must use ws:// or wss:// protocol';
+      }
+    } catch (e) {
+      return 'Invalid URL format';
+    }
+    
+    return null;
+  }
+  
+  String? _validateBitrate(int bitrate) {
+    if (!useCustomBitrate || _customBitrateController.text.isEmpty) return null;
+    
+    if (bitrate < 100) {
+      return 'Minimum bitrate is 100 kbps';
+    }
+    if (bitrate > 50000) {
+      return 'Maximum bitrate is 50000 kbps';
+    }
+    
+    return null;
   }
 }
 

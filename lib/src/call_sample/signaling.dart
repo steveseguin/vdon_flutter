@@ -325,6 +325,19 @@ class Signaling {
 	final initialReconnectDelayMs = 1000;
 	final maxReconnectDelayMs = 30000;
   
+  // Connection timeout handling
+  Timer? _connectionTimer;
+  final connectionTimeoutMs = 30000; // 30 seconds for initial connection
+  
+  // Network quality monitoring
+  Timer? _networkQualityTimer;
+  Map<String, dynamic> _networkStats = {};
+  final networkQualityIntervalMs = 5000; // Check every 5 seconds
+  
+  // Rate limiting for connection attempts
+  Map<String, DateTime> _lastConnectionAttempts = {};
+  final minConnectionIntervalMs = 2000; // Minimum 2 seconds between connection attempts
+  
   // Bitrate settings
   var customBitrate = 0; // 0 means use default
   var sdpBitrate = 0; // Bitrate from SDP if any
@@ -1046,22 +1059,53 @@ void _setPeerConnectionHandlers(RTCPeerConnection pc, String remoteUuid, String 
   // Connection state tracking
   pc.onIceConnectionState = (state) {
     print("ICE connection state for $remoteUuid: $state");
-    if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
-        state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
-        state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+    if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+      _handleConnectionError(remoteUuid, "ICE connection failed");
+    } else if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+      // Give some time for reconnection before triggering error recovery
+      Future.delayed(Duration(seconds: 5), () {
+        if (_sessions.containsKey(remoteUuid)) {
+          final currentState = _sessions[remoteUuid]?.iceConnectionState;
+          if (currentState == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+              currentState == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+            _handleConnectionError(remoteUuid, "ICE connection disconnected timeout");
+          }
+        }
+      });
+    } else if (state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
       _cleanupPeerConnection(remoteUuid);
+    } else if (state == RTCIceConnectionState.RTCIceConnectionStateConnected) {
+      // Reset reconnection attempt counter on successful connection
+      reconnectionAttempt = 0;
+      print("ICE connection established with $remoteUuid");
     }
   };
   
   pc.onConnectionState = (state) {
     print("PC connection state for $remoteUuid: $state");
-    if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-        state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
-        state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+    if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+      _handleConnectionError(remoteUuid, "Peer connection failed");
+    } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+      // Give some time for reconnection before triggering error recovery
+      Future.delayed(Duration(seconds: 3), () {
+        if (_sessions.containsKey(remoteUuid)) {
+          final currentState = _sessions[remoteUuid]?.connectionState;
+          if (currentState == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+              currentState == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+            _handleConnectionError(remoteUuid, "Peer connection disconnected timeout");
+          }
+        }
+      });
+    } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
       _cleanupPeerConnection(remoteUuid);
     } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      // Reset reconnection attempt counter on successful connection
+      reconnectionAttempt = 0;
       print("Peer connection established with $remoteUuid");
       onCallStateChange?.call(CallState.CallStateConnected);
+      
+      // Start network quality monitoring for this connection
+      _startNetworkQualityMonitoring(remoteUuid);
     }
   };
   
@@ -1090,6 +1134,19 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
     print("DEBUG: Session already exists for $remoteUuid, ignoring duplicate request");
     return;
   }
+  
+  // Rate limiting check
+  final now = DateTime.now();
+  final lastAttempt = _lastConnectionAttempts[remoteUuid];
+  if (lastAttempt != null) {
+    final timeSinceLastAttempt = now.difference(lastAttempt).inMilliseconds;
+    if (timeSinceLastAttempt < minConnectionIntervalMs) {
+      print("DEBUG: Rate limiting connection attempt for $remoteUuid. Time since last: ${timeSinceLastAttempt}ms");
+      return;
+    }
+  }
+  
+  _lastConnectionAttempts[remoteUuid] = now;
   
   print("DEBUG: Creating PeerConnection for $remoteUuid");
   
@@ -1304,6 +1361,92 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
     }
   }
 
+  // Enhanced error recovery with exponential backoff
+  Future<void> _handleConnectionError(String remoteUuid, String error) async {
+    print("Connection error for $remoteUuid: $error");
+    
+    // Clean up the failed connection
+    _cleanupPeerConnection(remoteUuid);
+    
+    // Check if we should attempt recovery
+    if (active && reconnectionAttempt < maxReconnectionAttempts) {
+      int delayMs = (initialReconnectDelayMs * pow(2, reconnectionAttempt)).toInt();
+      delayMs = delayMs.clamp(initialReconnectDelayMs, maxReconnectDelayMs);
+      
+      reconnectionAttempt++;
+      print('Attempting peer connection recovery #$reconnectionAttempt in ${delayMs / 1000} seconds for $remoteUuid...');
+      
+      Future.delayed(Duration(milliseconds: delayMs), () async {
+        if (active && !_sessions.containsKey(remoteUuid)) {
+          try {
+            await _createPeerConnectionAndOffer(remoteUuid);
+          } catch (e) {
+            print("Error during peer connection recovery for $remoteUuid: $e");
+            if (reconnectionAttempt >= maxReconnectionAttempts) {
+              print("Max recovery attempts reached for $remoteUuid. Giving up.");
+            }
+          }
+        }
+      });
+    } else {
+      print("Max recovery attempts reached or signaling inactive for $remoteUuid");
+    }
+  }
+
+  // Network quality monitoring
+  void _startNetworkQualityMonitoring(String remoteUuid) {
+    _networkQualityTimer?.cancel();
+    _networkQualityTimer = Timer.periodic(Duration(milliseconds: networkQualityIntervalMs), (timer) async {
+      if (!active || !_sessions.containsKey(remoteUuid)) {
+        timer.cancel();
+        return;
+      }
+      
+      try {
+        final pc = _sessions[remoteUuid];
+        if (pc != null) {
+          final stats = await pc.getStats();
+          _analyzeNetworkStats(remoteUuid, stats);
+        }
+      } catch (e) {
+        print("Error getting network stats for $remoteUuid: $e");
+      }
+    });
+  }
+
+  void _analyzeNetworkStats(String remoteUuid, List<StatsReport> stats) {
+    try {
+      // Analyze key metrics
+      for (var report in stats) {
+        if (report.type == 'outbound-rtp' && report.values['mediaType'] == 'video') {
+          final bytesSent = report.values['bytesSent'];
+          final packetsSent = report.values['packetsSent'];
+          final packetsLost = report.values['packetsLost'] ?? 0;
+          
+          if (bytesSent != null && packetsSent != null) {
+            _networkStats[remoteUuid] = {
+              'bytesSent': bytesSent,
+              'packetsSent': packetsSent,
+              'packetsLost': packetsLost,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            };
+            
+            // Calculate packet loss rate
+            if (packetsSent > 0) {
+              final lossRate = (packetsLost / (packetsSent + packetsLost)) * 100;
+              if (lossRate > 5.0) { // More than 5% packet loss
+                print("Warning: High packet loss rate for $remoteUuid: ${lossRate.toStringAsFixed(2)}%");
+              }
+            }
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      print("Error analyzing network stats: $e");
+    }
+  }
+
   // Helper to send ICE candidate
   Future<void> _sendIceCandidate(String remoteUuid, String sessionId, RTCIceCandidate candidate) async {
 		var request = <String, dynamic>{}; // Use Map literal
@@ -1379,6 +1522,22 @@ Future<void> attemptConnection() async {
       return;
     }
 
+    // Cancel any existing connection timer
+    _connectionTimer?.cancel();
+    
+    // Start connection timeout
+    _connectionTimer = Timer(Duration(milliseconds: connectionTimeoutMs), () {
+      if (!_isSocketConnected && active) {
+        print("Connection timeout after ${connectionTimeoutMs / 1000} seconds");
+        try {
+          _socket.close();
+        } catch (e) {
+          print("Error closing socket during timeout: $e");
+        }
+        _socket.onClose(1006, "Connection timeout");
+      }
+    });
+
     try {
       _socket = SimpleWebSocket();
 
@@ -1386,6 +1545,7 @@ Future<void> attemptConnection() async {
         print('WebSocket connection established to $WSSADDRESS');
         _isSocketConnected = true;
         reconnectionAttempt = 0;
+        _connectionTimer?.cancel(); // Cancel timeout on successful connection
         onSignalingStateChange(SignalingState.ConnectionOpen);
 
         // Send initial seed/join messages
@@ -1537,7 +1697,7 @@ Future<MediaStream> createStream() async {
 			  'width': width,
 			  'height': height,
 			  'maxWidth': width,
-			  'maxHeight': width,
+			  'maxHeight': height,  // Fixed: was using width instead of height
 			  'frameRate': frameRate
 			},
 		  },
@@ -1657,9 +1817,19 @@ Future<void> _createOffer(String remoteUuid, String sessionId, RTCPeerConnection
     }
     
     // Create offer with constraints
-    RTCSessionDescription? offer = await pc.createOffer(_sdpConstraints);
+    RTCSessionDescription? offer;
+    try {
+      offer = await pc.createOffer(_sdpConstraints);
+    } catch (e) {
+      print("Error creating offer: $e");
+      _handleBye(remoteUuid);
+      return;
+    }
+    
     if (offer == null || offer.sdp == null || offer.sdp!.isEmpty) {
-      throw Exception("Created offer is null or has empty SDP");
+      print("Created offer is null or has empty SDP");
+      _handleBye(remoteUuid);
+      return;
     }
     
     // Apply bitrate modification
@@ -1834,6 +2004,18 @@ Future<bool> _isHighPerformanceDevice() async {
   Future<void> _cleanSessions() async {
     print("Cleaning up sessions and resources...");
     active = false; // Mark as inactive
+
+    // Cancel connection timeout timer
+    _connectionTimer?.cancel();
+    _connectionTimer = null;
+    
+    // Cancel network quality monitoring timer
+    _networkQualityTimer?.cancel();
+    _networkQualityTimer = null;
+    
+    // Clear rate limiting data
+    _lastConnectionAttempts.clear();
+    _networkStats.clear();
 
     // Dispose iOS silent audio player first
     if (Platform.isIOS) {

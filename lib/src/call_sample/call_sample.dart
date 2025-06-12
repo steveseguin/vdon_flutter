@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:math'; // Import math for Point
 import 'dart:async';
+import '../../main.dart'; // Import for ConnectionMode enum
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
@@ -28,6 +29,7 @@ class CallSample extends StatefulWidget {
   final bool mirrored;
   final int customBitrate;
   final String customSalt;
+  final ConnectionMode connectionMode;
 
   CallSample(
       {required Key key,
@@ -44,7 +46,8 @@ class CallSample extends StatefulWidget {
       required this.muted,
       required this.mirrored,
       this.customBitrate = 0,
-      this.customSalt = 'vdo.ninja'})
+      this.customSalt = 'vdo.ninja',
+      this.connectionMode = ConnectionMode.standard})
       : super(key: key);
 
   @override
@@ -76,6 +79,9 @@ class _CallSampleState extends State<CallSample> {
   Offset? _focusPoint;
   bool _focusPointVisible = false;
   Timer? _focusPointTimer; // Timer to hide the focus indicator
+  
+  // iOS platform view controller reference
+  RTCVideoPlatformViewController? _iosViewController;
 
   _CallSampleState();
 
@@ -118,6 +124,9 @@ class _CallSampleState extends State<CallSample> {
     } catch (e) {
       print("Error disposing remote renderer: $e");
     }
+    
+    // Clear iOS controller reference
+    _iosViewController = null;
 
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeRight,
@@ -130,13 +139,34 @@ class _CallSampleState extends State<CallSample> {
 
 	Widget _buildVideoRenderer() {
 	  // Choose the renderer based on platform and add performance optimizations
+	  print("Building video renderer. Stream: ${_localRenderer.srcObject?.id ?? 'null'}, Preview: $preview, InCalling: $_inCalling");
+	  
+	  // If no stream is available yet, show a loading state
+	  if (_localRenderer.srcObject == null) {
+	    return Container(
+	      color: Colors.black,
+	      child: Center(
+	        child: Column(
+	          mainAxisAlignment: MainAxisAlignment.center,
+	          children: [
+	            CircularProgressIndicator(color: Colors.white),
+	            SizedBox(height: 20),
+	            Text("Starting camera...", style: TextStyle(color: Colors.white)),
+	            Text("Stream: ${_localRenderer.srcObject?.id ?? 'null'}", 
+	                 style: TextStyle(color: Colors.white70, fontSize: 12)),
+	          ],
+	        ),
+	      ),
+	    );
+	  }
+	  
 	  if (Platform.isIOS) {
 		return RTCVideoPlatFormView(
 		  onViewReady: (RTCVideoPlatformViewController controller) {
-			// Apply the stream source to the platform view controller
+			// Store the controller reference and apply current stream
+			_iosViewController = controller;
 			controller.srcObject = _localRenderer.srcObject;
-			
-			print("iOS RTCVideoPlatFormView ready with optimizations.");
+			print("iOS RTCVideoPlatformViewController ready with stream: ${_localRenderer.srcObject?.id ?? 'null'}");
 		  },
 		  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
 		  mirror: _shouldMirror(), // Use helper function for mirroring logic
@@ -361,6 +391,27 @@ class _CallSampleState extends State<CallSample> {
             server.map((key, value) => MapEntry(key, value.toString())))
         .toList();
 
+    // Handle empty WebSocket address - revert to default
+    String effectiveWSS = widget.WSSADDRESS.trim().isEmpty 
+        ? 'wss://wss.vdo.ninja:443' 
+        : widget.WSSADDRESS;
+    
+    // Modify WebSocket address for TikTok mode
+    if (widget.connectionMode == ConnectionMode.tiktok) {
+      // TikTok mode uses a specialized WebSocket endpoint
+      if (effectiveWSS == 'wss://wss.vdo.ninja:443') {
+        effectiveWSS = 'wss://wss-tiktok.vdo.ninja:443';
+      } else {
+        // For custom servers, append tiktok parameter
+        effectiveWSS = effectiveWSS.contains('?') 
+            ? '${effectiveWSS}&tiktok=1'
+            : '${effectiveWSS}?tiktok=1';
+      }
+      print("TikTok mode: Using WebSocket address: $effectiveWSS");
+    }
+    
+    print("Final WebSocket address: $effectiveWSS");
+
     // Initialize Signaling with the processed TURN list
     _signaling = Signaling(
         widget.streamID,
@@ -368,7 +419,7 @@ class _CallSampleState extends State<CallSample> {
         widget.audioDeviceId,
         widget.roomID,
         widget.quality,
-        widget.WSSADDRESS,
+        effectiveWSS,
         finalTurnListForSignaling,
         widget.password,
         widget.customBitrate,
@@ -402,24 +453,23 @@ class _CallSampleState extends State<CallSample> {
           if (mounted) {
             setState(() {
               _inCalling = true;
-              MediaStream? localStream = _signaling?.getLocalStream();
-              if (localStream != null) {
-                _localRenderer.srcObject = localStream;
-                _applyZoom(_currentZoom);
-                print("Local stream assigned to renderer.");
-              } else {
-                print("Error: Local stream is null in CallStateNew.");
-              }
             });
+            MediaStream? localStream = _signaling?.getLocalStream();
+            if (localStream != null) {
+              _assignLocalStream(localStream);
+              print("Local stream assigned to renderer in CallStateNew.");
+            } else {
+              print("Error: Local stream is null in CallStateNew.");
+            }
           }
           break;
         case CallState.CallStateBye:
           if (mounted) {
             setState(() {
               _inCalling = false;
-              _localRenderer.srcObject = null;
-              _remoteRenderer.srcObject = null;
             });
+            _assignLocalStream(null);
+            _remoteRenderer.srcObject = null;
           }
           break;
         case CallState.CallStateInvite:
@@ -448,11 +498,9 @@ class _CallSampleState extends State<CallSample> {
     });
 
     _signaling?.onLocalStream = ((stream) {
-      print("Local stream received in callback.");
+      print("Local stream received in onLocalStream callback.");
       if (mounted) {
-        _localRenderer.srcObject = stream;
-        _applyZoom(_currentZoom);
-        setState(() {});
+        _assignLocalStream(stream);
       }
     });
 
@@ -605,6 +653,25 @@ class _CallSampleState extends State<CallSample> {
       }
     });
   }
+
+  void _assignLocalStream(MediaStream? stream) {
+    if (!mounted) return;
+    
+    print("Assigning local stream: ${stream?.id ?? 'null'} to renderer");
+    setState(() {
+      _localRenderer.srcObject = stream;
+      
+      // For iOS, also update the platform view controller if it exists
+      if (Platform.isIOS && _iosViewController != null) {
+        _iosViewController!.srcObject = stream;
+        print("Updated iOS platform view controller with stream: ${stream?.id ?? 'null'}");
+      }
+      
+      if (stream != null) {
+        _applyZoom(_currentZoom);
+      }
+    });
+  }
   // ------------------------------------
 
   _toggleFlashlight() async {
@@ -667,13 +734,13 @@ class _CallSampleState extends State<CallSample> {
 
     if (newPreviewState) {
       if (stream != null) {
-        _localRenderer.srcObject = stream;
+        _assignLocalStream(stream);
       } else {
         print("Error: Cannot enable preview, local stream is null.");
         return;
       }
     } else {
-      _localRenderer.srcObject = null;
+      _assignLocalStream(null);
     }
 
     if (mounted) {
@@ -984,8 +1051,18 @@ class _CallSampleState extends State<CallSample> {
                         : Container(
                             color: Colors.black54,
                             child: Center(
-                                child: Icon(Icons.visibility_off,
-                                    color: Colors.white, size: 50))),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.visibility_off, color: Colors.white, size: 50),
+                                  SizedBox(height: 10),
+                                  Text("Preview Disabled", style: TextStyle(color: Colors.white)),
+                                  Text("Preview: $preview, InCalling: $_inCalling", 
+                                       style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          ),
                   )
                 else // Mic-only specific UI
                   Container(
@@ -1046,6 +1123,36 @@ class _CallSampleState extends State<CallSample> {
                               Border.all(color: Colors.yellowAccent, width: 2),
                           shape: BoxShape.circle, // Use circle shape
                         ),
+                      ),
+                    ),
+                  ),
+
+                // TikTok Mode Indicator
+                if (widget.connectionMode == ConnectionMode.tiktok)
+                  Positioned(
+                    top: 48,
+                    left: 20,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.purpleAccent, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.flash_on, color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'TikTok Mode',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
