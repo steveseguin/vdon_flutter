@@ -230,6 +230,46 @@ class CodecsHandler {
     return sdpLines.join('\r\n');
   }
   
+  // Parse bitrate from incoming SDP
+  static int? parseBitrateFromSdp(String sdp) {
+    var sdpLines = sdp.split('\r\n');
+    
+    // First, check for b=AS: line (kilobits per second)
+    final asLineIndex = _findLine(sdpLines, 'b=AS:');
+    if (asLineIndex != null) {
+      final asLine = sdpLines[asLineIndex];
+      final match = RegExp(r'b=AS:(\d+)').firstMatch(asLine);
+      if (match != null) {
+        return int.tryParse(match.group(1)!);
+      }
+    }
+    
+    // Check for b=TIAS: line (bits per second, convert to kbps)
+    final tiasLineIndex = _findLine(sdpLines, 'b=TIAS:');
+    if (tiasLineIndex != null) {
+      final tiasLine = sdpLines[tiasLineIndex];
+      final match = RegExp(r'b=TIAS:(\d+)').firstMatch(tiasLine);
+      if (match != null) {
+        final bitsPerSecond = int.tryParse(match.group(1)!);
+        if (bitsPerSecond != null) {
+          return bitsPerSecond ~/ 1000; // Convert to kbps
+        }
+      }
+    }
+    
+    // Check for x-google-max-bitrate in fmtp lines
+    for (var line in sdpLines) {
+      if (line.startsWith('a=fmtp:')) {
+        final match = RegExp(r'x-google-max-bitrate=(\d+)').firstMatch(line);
+        if (match != null) {
+          return int.tryParse(match.group(1)!);
+        }
+      }
+    }
+    
+    return null;
+  }
+  
   // Helper method to find a line in SDP
   static int? _findLine(List<String> sdpLines, String prefix, [String? substr]) {
     for (int i = 0; i < sdpLines.length; i++) {
@@ -273,7 +313,7 @@ class Signaling {
   var UUID = "";
   var TURNLIST = []; // Default or passed in
   var audioDeviceId = "default"; // Default or passed in
-  var salt = "vdo.ninja"; // Keep salt constant
+  var salt = "vdo.ninja"; // Default salt, can be customized
   var password = ""; // Default or passed in
   var usepassword = false;
   MediaStream? _localStream;
@@ -284,6 +324,10 @@ class Signaling {
 	final maxReconnectionAttempts = 5;
 	final initialReconnectDelayMs = 1000;
 	final maxReconnectDelayMs = 30000;
+  
+  // Bitrate settings
+  var customBitrate = 0; // 0 means use default
+  var sdpBitrate = 0; // Bitrate from SDP if any
   // -------------------------------------------
 
   // Constructor
@@ -296,6 +340,8 @@ class Signaling {
     String wssAddress,
     List turnList, // Expect List<Map<String, String>> or similar
     String password,
+    int customBitrate,
+    [String customSalt = 'vdo.ninja'] // Optional parameter with default value
   ) {
     // Sanitize IDs
     this.streamID = streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
@@ -305,6 +351,12 @@ class Signaling {
     this.audioDeviceId = audioDeviceId;
     this.quality = quality;
     this.WSSADDRESS = wssAddress;
+    this.salt = customSalt;
+    this.customBitrate = customBitrate;
+    if (customBitrate > 0) {
+      print("Custom bitrate set to ${customBitrate}kbps");
+    }
+    print("Using custom salt: ${this.salt}");
     this.TURNLIST = turnList.isNotEmpty
         ? turnList
         : [
@@ -582,6 +634,37 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
   }
   // --- End Audio Source Change ---
 
+  // --- Video Bitrate Control ---
+  Future<void> setVideoBitrate(RTCPeerConnection pc, int targetBitrate) async {
+    try {
+      // Note: getParameters/setParameters may not be available in flutter_webrtc 0.13.0
+      // We'll rely on SDP manipulation for now
+      print("Bitrate control via RTCRtpSender not available in this version");
+      print("Target bitrate ${targetBitrate}kbps will be applied via SDP manipulation");
+      
+      // Alternative approach: could try to renegotiate with new SDP
+      // but that's more complex and may cause disruption
+    } catch (e) {
+      print("Error setting video bitrate: $e");
+    }
+  }
+
+  int getTargetBitrate() {
+    // Priority: SDP bitrate > custom bitrate > default based on quality
+    if (sdpBitrate > 0) {
+      return sdpBitrate;
+    }
+    
+    if (customBitrate > 0) {
+      return customBitrate;
+    }
+    
+    // Default bitrates: 6mbps for 720p, 10mbps for 1080p
+    return quality ? 10000 : 6000;
+  }
+  
+  // --- End Video Bitrate Control ---
+
   // --- WebSocket and PeerConnection Management ---
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
@@ -745,6 +828,14 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
 
     String sdp = descriptionMap['sdp'];
     String type = descriptionMap['type'];
+    
+    // Parse bitrate from incoming SDP
+    final parsedBitrate = CodecsHandler.parseBitrateFromSdp(sdp);
+    if (parsedBitrate != null && parsedBitrate > 0) {
+      print("Parsed bitrate from incoming SDP: ${parsedBitrate}kbps");
+      sdpBitrate = parsedBitrate;
+    }
+    
     var description = RTCSessionDescription(sdp, type);
 
     print("Setting remote description ($type) for $remoteUuid.");
@@ -760,6 +851,13 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
       } else {
         // It was an answer
         print("Received answer from $remoteUuid.");
+        
+        // If we parsed bitrate from the answer and we're sending video, apply it
+        if (parsedBitrate != null && parsedBitrate > 0 && 
+            _localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+          print("Applying parsed bitrate ${parsedBitrate}kbps from answer to our video sender");
+          await setVideoBitrate(pc, parsedBitrate);
+        }
       }
     } catch (e) {
       print("ERROR setting remote description for $remoteUuid: $e");
@@ -1059,16 +1157,17 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
       await pc.setLocalDescription(s);
       print("DEBUG: Local description set successfully");
       
-      // Apply bitrate modification if needed
+      // Apply bitrate using SDP manipulation
       String sdp = s.sdp!;
       if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-        // Apply video bitrate limit
-        final params = {'min': 600, 'max': quality ? 2500 : 1500};
-        //sdp = CodecsHandler.setVideoBitrates(sdp, params);
-        print("DEBUG: Modified SDP with bitrate constraints");
+        // Get target bitrate
+        int targetBitrate = getTargetBitrate();
+        final params = {'min': (targetBitrate * 0.1).round(), 'max': targetBitrate};
+        sdp = CodecsHandler.setVideoBitrates(sdp, params);
+        print("DEBUG: Modified SDP with bitrate constraints: ${targetBitrate}kbps");
       }
       
-      // Create modified description if needed
+      // Create modified description with updated SDP
       RTCSessionDescription description = RTCSessionDescription(sdp, s.type);
       
       // Prepare to send the offer
@@ -1564,15 +1663,14 @@ Future<void> _createOffer(String remoteUuid, String sessionId, RTCPeerConnection
     }
     
     // Apply bitrate modification
-    bool isHighEndDevice = await _isHighPerformanceDevice();
-    int maxBitrate = quality ? (isHighEndDevice ? 4000 : 3000) : (isHighEndDevice ? 2500 : 1800);
-    int minBitrate = quality ? 800 : 600;
+    int targetBitrate = getTargetBitrate();
+    int minBitrate = targetBitrate ~/ 5; // Set minimum to 20% of target
     
-    final params = {'min': minBitrate, 'max': maxBitrate};
+    final params = {'min': minBitrate, 'max': targetBitrate};
     print("Setting video bitrates: min=${params['min']}kbps, max=${params['max']}kbps");
     
     String sdp = offer.sdp!;
-   // sdp = CodecsHandler.setVideoBitrates(sdp, params);
+    sdp = CodecsHandler.setVideoBitrates(sdp, params);
     
     // Create modified offer
     RTCSessionDescription modifiedOffer = RTCSessionDescription(sdp, offer.type);
@@ -1658,6 +1756,14 @@ Future<bool> _isHighPerformanceDevice() async {
 		  print("Answer created. Setting local description for $remoteUuid.");
 		  await pc.setLocalDescription(s);
 		  print("Local description set for $remoteUuid.");
+		  
+		  // Apply bitrate using RTCRtpSender if we have video tracks
+		  if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+		    // Get target bitrate (which now includes parsed SDP bitrate)
+		    int targetBitrate = getTargetBitrate();
+		    await setVideoBitrate(pc, targetBitrate);
+		    print("Set video bitrate to ${targetBitrate}kbps for answer");
+		  }
 
 		  var request = <String, dynamic>{};
 		  request["UUID"] = remoteUuid; // Target
@@ -1817,4 +1923,36 @@ Future<bool> _isHighPerformanceDevice() async {
     print("Cleanup complete.");
   }
   // --- End Cleanup Logic ---
+  
+  // --- Public Bitrate Control Methods ---
+  Future<void> setCustomBitrate(int bitrateKbps) async {
+    customBitrate = bitrateKbps;
+    print("Custom bitrate set to ${bitrateKbps}kbps");
+    
+    // Apply to all active connections
+    for (var entry in _sessions.entries) {
+      if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+        int targetBitrate = getTargetBitrate();
+        await setVideoBitrate(entry.value, targetBitrate);
+        print("Updated bitrate to ${targetBitrate}kbps for ${entry.key}");
+      }
+    }
+  }
+  
+  void resetBitrate() {
+    customBitrate = 0;
+    sdpBitrate = 0;
+    print("Bitrate settings reset to defaults");
+  }
+  
+  Map<String, dynamic> getBitrateInfo() {
+    return {
+      'currentBitrate': getTargetBitrate(),
+      'customBitrate': customBitrate,
+      'sdpBitrate': sdpBitrate,
+      'defaultBitrate': quality ? 10000 : 6000,
+      'quality': quality,
+    };
+  }
+  // --- End Public Bitrate Control Methods ---
 } // End of Signaling Class

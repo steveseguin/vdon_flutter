@@ -17,6 +17,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'dart:async'; 
+import 'dart:ui' as ui;
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -189,8 +190,11 @@ String password = "";
 bool quality = false;
 bool advanced = false;
 bool landscape = false;
+bool useCustomBitrate = false;
+int customBitrate = 0;
 String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
+String customSalt = 'vdo.ninja';
 
 String _selectedMicrophoneId = 'default';
 List<MediaDeviceInfo> _microphones = [];
@@ -351,6 +355,65 @@ class _MyAppState extends State<MyApp> {
     );
   }
   
+  String _normalizeWSSAddress(String address) {
+    // Trim whitespace
+    address = address.trim();
+    
+    // If no protocol is specified, assume wss://
+    if (!address.startsWith('ws://') && !address.startsWith('wss://') && 
+        !address.startsWith('http://') && !address.startsWith('https://')) {
+      address = 'wss://' + address;
+    }
+    
+    // Convert http:// to ws:// and https:// to wss://
+    if (address.startsWith('http://')) {
+      address = address.replaceFirst('http://', 'ws://');
+    } else if (address.startsWith('https://')) {
+      address = address.replaceFirst('https://', 'wss://');
+    }
+    
+    return address;
+  }
+
+  String _getDefaultSaltFromWSSAddress(String wssAddress) {
+    try {
+      // Normalize the address first
+      wssAddress = _normalizeWSSAddress(wssAddress);
+      
+      // Parse the URL
+      Uri uri = Uri.parse(wssAddress);
+      String host = uri.host;
+      
+      // If host is empty, try to extract from the address directly
+      if (host.isEmpty && wssAddress.contains('://')) {
+        // Extract the part after :// and before the next / or :
+        String afterProtocol = wssAddress.split('://')[1];
+        host = afterProtocol.split(RegExp(r'[:/]'))[0];
+      }
+      
+      // Extract the top-level domain (last two parts)
+      List<String> parts = host.split('.');
+      if (parts.length >= 2) {
+        // Handle cases like .co.uk, .com.au etc
+        String lastPart = parts[parts.length - 1];
+        String secondLastPart = parts[parts.length - 2];
+        
+        // Check for common two-part TLDs
+        if ((lastPart.length == 2 && secondLastPart.length <= 3) || 
+            ['com', 'net', 'org', 'edu', 'gov', 'mil', 'co'].contains(secondLastPart)) {
+          if (parts.length >= 3) {
+            return '${parts[parts.length - 3]}.${secondLastPart}.${lastPart}';
+          }
+        }
+        
+        return '${secondLastPart}.${lastPart}';
+      }
+      return host.isNotEmpty ? host : 'vdo.ninja';
+    } catch (e) {
+      return 'vdo.ninja';
+    }
+  }
+
   void _initData() async {
     if (WebRTC.platformIsAndroid) {
       // Request battery optimization exemption for better performance
@@ -369,8 +432,9 @@ class _MyAppState extends State<MyApp> {
     roomID = _prefs.getString('roomID') ?? "";
     password = _prefs.getString('password') ?? "";
     
-    WSSADDRESS = _prefs.getString('WSSADDRESS') ?? WSSADDRESS;
+    WSSADDRESS = _normalizeWSSAddress(_prefs.getString('WSSADDRESS') ?? WSSADDRESS);
     TURNSERVER = _prefs.getString('TURNSERVER') ?? TURNSERVER;
+    customSalt = _prefs.getString('customSalt') ?? _getDefaultSaltFromWSSAddress(WSSADDRESS);
     // _selectedMicrophoneId = _prefs.getString('audioDeviceId') ?? _selectedMicrophoneId;
     
     try {
@@ -379,6 +443,15 @@ class _MyAppState extends State<MyApp> {
     
     try {
       landscape = _prefs.getBool('landscape') ?? false;
+    } catch (e) {}
+    
+    try {
+      advanced = _prefs.getBool('advanced') ?? false;
+    } catch (e) {}
+    
+    try {
+      useCustomBitrate = _prefs.getBool('useCustomBitrate') ?? false;
+      customBitrate = _prefs.getInt('customBitrate') ?? 0;
     } catch (e) {}
     
     if (streamID == "") {
@@ -406,14 +479,481 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  void showDemoDialog<T>({
-    required BuildContext context,
-    required Widget child
-  }) {
-    showDialog<T>(
+  
+  _showAddressDialog(context) {
+    showDialog<DialogDemoAction>(
       context: context,
-      builder: (BuildContext context) => child,
-    ).then<void>((T? value) {
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.3),
+      builder: (BuildContext context) {
+        return BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: EdgeInsets.zero,
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: ninjaDialogColor.withValues(alpha: 0.95),
+              ),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Publishing Settings',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, color: Colors.white),
+                            onPressed: () => Navigator.pop(context, DialogDemoAction.cancel),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            SizedBox(height: 20),
+                            // Stream ID TextField
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 12),
+                              child: TextField(
+                                style: TextStyle(color: Colors.white),
+                                onChanged: (String text) {
+                                  setState(() {
+                                    streamID = text;
+                                    _prefs.setString('streamID', streamID);
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  hintText: streamID,
+                                  labelText: 'Stream ID (auto-generated if empty)',
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                  hintStyle: TextStyle(color: Colors.white30),
+                                  enabledBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.white30),
+                                  ),
+                                  focusedBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: ninjaAccentColor),
+                                  ),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            
+                            // Room ID TextField
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 12),
+                              child: TextField(
+                                style: TextStyle(color: Colors.white),
+                                controller: TextEditingController()..text = roomID ?? "",
+                                onChanged: (String text) {
+                                  setState(() {
+                                    roomID = text;
+                                    _prefs.setString('roomID', roomID);
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  hintText: roomID ?? "Room name",
+                                  labelText: 'Room name (optional)',
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                  hintStyle: TextStyle(color: Colors.white30),
+                                  enabledBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.white30),
+                                  ),
+                                  focusedBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: ninjaAccentColor),
+                                  ),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            
+                            // Password TextField
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 12),
+                              child: TextField(
+                                style: TextStyle(color: Colors.white),
+                                controller: TextEditingController()..text = password ?? "",
+                                onChanged: (String textpass) {
+                                  setState(() {
+                                    password = textpass;
+                                    _prefs.setString('password', textpass);
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  hintText: password ?? "Password",
+                                  labelText: 'Password (optional)',
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                  hintStyle: TextStyle(color: Colors.white30),
+                                  enabledBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: Colors.white30),
+                                  ),
+                                  focusedBorder: UnderlineInputBorder(
+                                    borderSide: BorderSide(color: ninjaAccentColor),
+                                  ),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            
+                            // Microphone Dropdown
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Microphone',
+                                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: EdgeInsets.symmetric(horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.white30),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: DropdownButton<String>(
+                                      value: _selectedMicrophoneId,
+                                      dropdownColor: ninjaDialogColor,
+                                      style: TextStyle(color: Colors.white),
+                                      isExpanded: true,
+                                      underline: SizedBox(),
+                                      onChanged: (String? newValue) {
+                                        if (newValue != null) {
+                                          _prefs.setString('audioDeviceId', newValue);
+                                          setState(() {
+                                            _selectedMicrophoneId = newValue;
+                                            Navigator.pop(context);
+                                            _showAddressDialog(context);
+                                          });
+                                        }
+                                      },
+                                      items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
+                                        return DropdownMenuItem<String>(
+                                          value: device.deviceId,
+                                          child: Text(device.label, overflow: TextOverflow.ellipsis),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            // Divider
+                            Divider(color: Colors.white30, height: 32),
+                            
+                            // Quality Switch
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SwitchListTile(
+                                title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
+                                subtitle: Text(quality ? '1920x1080 @ 30fps' : '1280x720 @ 30fps', 
+                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                value: quality,
+                                activeColor: ninjaAccentColor,
+                                onChanged: (bool value) {
+                                  _prefs.setBool('resolution', value);
+                                  setState(() {
+                                    quality = value;
+                                    Navigator.pop(context);
+                                    _showAddressDialog(context);
+                                  });
+                                }
+                              ),
+                            ),
+                            
+                            // Landscape Switch
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SwitchListTile(
+                                title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
+                                subtitle: Text('Lock orientation to landscape mode', 
+                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                value: landscape,
+                                activeColor: ninjaAccentColor,
+                                onChanged: (bool value) {
+                                  _prefs.setBool('landscape', value);
+                                  setState(() {
+                                    landscape = value;
+                                    Navigator.pop(context);
+                                    _showAddressDialog(context);
+                                  });
+                                }
+                              ),
+                            ),
+                            
+                            // Advanced Settings Toggle
+                            Container(
+                              margin: EdgeInsets.only(top: 16, bottom: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SwitchListTile(
+                                title: const Text('Advanced Settings', style: TextStyle(color: Colors.white)),
+                                subtitle: Text('Show additional configuration options', 
+                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                value: advanced,
+                                activeColor: ninjaAccentColor,
+                                onChanged: (bool value) {
+                                  _prefs.setBool('advanced', value);
+                                  setState(() {
+                                    advanced = value;
+                                    Navigator.pop(context);
+                                    _showAddressDialog(context);
+                                  });
+                                }
+                              ),
+                            ),
+                            
+                            // Advanced Settings Section
+                            if (advanced) ...[
+                              SizedBox(height: 16),
+                              
+                              // WSS Address TextField
+                              Container(
+                                margin: EdgeInsets.symmetric(vertical: 12),
+                                child: TextField(
+                                  style: TextStyle(color: Colors.white),
+                                  controller: TextEditingController()..text = WSSADDRESS,
+                                  onChanged: (String text) {
+                                    setState(() {
+                                      // Normalize the address
+                                      WSSADDRESS = _normalizeWSSAddress(text);
+                                      _prefs.setString('WSSADDRESS', WSSADDRESS);
+                                      // Update custom salt based on new WSS address
+                                      customSalt = _getDefaultSaltFromWSSAddress(WSSADDRESS);
+                                      _prefs.setString('customSalt', customSalt);
+                                      Navigator.pop(context);
+                                      _showAddressDialog(context);
+                                    });
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: WSSADDRESS,
+                                    labelText: 'Handshake server',
+                                    helperText: 'e.g., wss.example.com or wss://wss.example.com:443',
+                                    helperStyle: TextStyle(color: Colors.white54),
+                                    labelStyle: TextStyle(color: Colors.white70),
+                                    hintStyle: TextStyle(color: Colors.white30),
+                                    enabledBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: Colors.white30),
+                                    ),
+                                    focusedBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: ninjaAccentColor),
+                                    ),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              
+                              // Custom Salt TextField
+                              Container(
+                                margin: EdgeInsets.symmetric(vertical: 12),
+                                child: TextField(
+                                  style: TextStyle(color: Colors.white),
+                                  controller: TextEditingController()..text = customSalt,
+                                  onChanged: (String text) {
+                                    setState(() {
+                                      customSalt = text;
+                                      _prefs.setString('customSalt', customSalt);
+                                    });
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: customSalt,
+                                    labelText: 'Custom Salt',
+                                    helperText: 'Default: Top domain from handshake server',
+                                    helperStyle: TextStyle(color: Colors.white54),
+                                    labelStyle: TextStyle(color: Colors.white70),
+                                    hintStyle: TextStyle(color: Colors.white30),
+                                    enabledBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: Colors.white30),
+                                    ),
+                                    focusedBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: ninjaAccentColor),
+                                    ),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              
+                              // TURN Server TextField
+                              Container(
+                                margin: EdgeInsets.symmetric(vertical: 12),
+                                child: TextField(
+                                  style: TextStyle(color: Colors.white),
+                                  onChanged: (String text) {
+                                    setState(() {
+                                      TURNSERVER = text;
+                                      _prefs.setString('TURNSERVER', TURNSERVER);
+                                    });
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: TURNSERVER,
+                                    labelText: 'TURN server',
+                                    labelStyle: TextStyle(color: Colors.white70),
+                                    hintStyle: TextStyle(color: Colors.white30),
+                                    enabledBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: Colors.white30),
+                                    ),
+                                    focusedBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: ninjaAccentColor),
+                                    ),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              
+                              // Custom Bitrate Switch
+                              Container(
+                                margin: EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.white10),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: SwitchListTile(
+                                  title: const Text('Custom bitrate', style: TextStyle(color: Colors.white)),
+                                  subtitle: Text('Override default video bitrate', 
+                                    style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                  value: useCustomBitrate,
+                                  activeColor: ninjaAccentColor,
+                                  onChanged: (bool value) {
+                                    _prefs.setBool('useCustomBitrate', value);
+                                    setState(() {
+                                      useCustomBitrate = value;
+                                      Navigator.pop(context);
+                                      _showAddressDialog(context);
+                                    });
+                                  }
+                                ),
+                              ),
+                              
+                              // Custom Bitrate Input
+                              if (useCustomBitrate)
+                                Container(
+                                  margin: EdgeInsets.symmetric(vertical: 12),
+                                  child: TextField(
+                                    style: TextStyle(color: Colors.white),
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (String text) {
+                                      setState(() {
+                                        customBitrate = int.tryParse(text) ?? 0;
+                                        _prefs.setInt('customBitrate', customBitrate);
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: customBitrate > 0 ? customBitrate.toString() : 
+                                                (quality ? "10000" : "6000"),
+                                      labelText: 'Bitrate (kbps)',
+                                      helperText: 'Default: ${quality ? "10000" : "6000"} kbps',
+                                      helperStyle: TextStyle(color: Colors.white54),
+                                      labelStyle: TextStyle(color: Colors.white70),
+                                      hintStyle: TextStyle(color: Colors.white30),
+                                      enabledBorder: UnderlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.white30),
+                                      ),
+                                      focusedBorder: UnderlineInputBorder(
+                                        borderSide: BorderSide(color: ninjaAccentColor),
+                                      ),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                            ],
+                            SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    // Bottom Action Buttons
+                    Container(
+                      padding: EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Text('CANCEL',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  )
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Colors.white30),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context, DialogDemoAction.cancel);
+                              }
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Text('CONNECT',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  )
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: ninjaAccentColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context, DialogDemoAction.connect);
+                              }
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ).then<void>((DialogDemoAction? value) {
       if (value == DialogDemoAction.connect) {
         Navigator.push(
           context,
@@ -431,212 +971,12 @@ class _MyAppState extends State<MyApp> {
               password: (password=="") ? "someEncryptionKey123" : password,
               muted: false,
               preview: true,
-              mirrored: true
+              mirrored: true,
+              customBitrate: useCustomBitrate ? customBitrate : 0,
+              customSalt: customSalt
             )));
       }
     });
-  }
-  
-  _showAddressDialog(context) {
-    showDemoDialog<DialogDemoAction>(
-      context: context,
-      child: AlertDialog(
-        title: const Text('Publishing settings'),
-        scrollable: true,
-        backgroundColor: ninjaDialogColor,  // Use the dialog color instead of card color
-        surfaceTintColor: Colors.transparent,
-        insetPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        contentPadding: EdgeInsets.only(left: 10, right: 10, bottom: MediaQuery.of(context).viewInsets.bottom),
-        content: SingleChildScrollView(
-          child: new Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-                  child: TextField(
-                  style: TextStyle(color: Colors.white),
-                    onChanged: (String text) {
-                      setState(() {
-                        streamID = text;
-                        _prefs.setString('streamID', streamID);
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: streamID,
-                      labelText: 'Stream ID (auto-generated if empty)'
-                    ),
-                    textAlign: TextAlign.center
-                  ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 55, 0, 0),
-                  child: TextField(
-                  style: TextStyle(color: Colors.white),
-                    controller: TextEditingController()..text = roomID ?? "",
-                    onChanged: (String text) {
-                      setState(() {
-                        roomID = text;
-                        _prefs.setString('roomID', roomID);
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: roomID ?? "Room name",
-                      labelText: 'Room name (optional)',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 110, 0, 0),
-                  child: TextField(
-                  style: TextStyle(color: Colors.white),
-                    controller: TextEditingController()..text = password ?? "",
-                    onChanged: (String textpass) {
-                      setState(() {
-                        password = textpass;
-                        _prefs.setString('password', textpass);
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: password ?? "Password",
-                      labelText: 'Password (optional)',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 190, 0, 0),
-                child: DropdownButton<String>(
-                  value: _selectedMicrophoneId,
-                  dropdownColor: ninjaDialogColor,
-                  style: TextStyle(color: Colors.white),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      _prefs.setString('audioDeviceId', newValue);
-                      setState(() {
-                        _selectedMicrophoneId = newValue;
-                        Navigator.pop(context);
-                        _showAddressDialog(context);
-                      });
-                    }
-                  },
-                  items: _microphones.map<DropdownMenuItem<String>>((MediaDeviceInfo device) {
-                    return DropdownMenuItem<String>(
-                      value: device.deviceId,
-                      child: Text(device.label),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 240, 0, 0),
-                  child: SwitchListTile(
-                    title: const Text('Prefer 1080p', style: TextStyle(color: Colors.white)),
-                      value: quality,
-                      onChanged: (bool value) {
-                        _prefs.setBool('resolution', value);
-                        setState(() {
-                          quality = value;
-                          Navigator.pop(context);
-                          _showAddressDialog(context);
-                        });
-                      }),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 280, 0, 0),
-                  child: SwitchListTile(
-                    title: const Text('Force landscape', style: TextStyle(color: Colors.white)),
-                      value: landscape,
-                      onChanged: (bool value) {
-                        _prefs.setBool('landscape', value);
-                        setState(() {
-                          landscape = value;
-                          Navigator.pop(context);
-                          _showAddressDialog(context);
-                        });
-                      }
-                  ),
-              ),
-              if (!advanced)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
-                  
-                    child: SwitchListTile(
-                    
-                      title: const Text('Advanced', style: TextStyle(color: Colors.white)),
-                        value: advanced,
-                        onChanged: (bool value) {
-                          _prefs.setBool('advanced', value);
-                          setState(() {
-                            advanced = value;
-                            Navigator.pop(context);
-                            _showAddressDialog(context);
-                          });
-                        }),
-                ),
-                if (advanced)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 320, 0, 0),
-                      child: TextField(
-                      style: TextStyle(color: Colors.white),
-                        onChanged: (String text) {
-                          setState(() {
-                            WSSADDRESS = text;
-                            _prefs.setString('WSSADDRESS', WSSADDRESS);
-                          });
-                        },
-                        decoration: InputDecoration(
-                          hintText: WSSADDRESS,
-                          labelText: 'Handshake server',
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                  ),
-                  if (advanced)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 375, 0, 0),
-                        child: TextField(
-                        style: TextStyle(color: Colors.white),
-                          onChanged: (String text) {
-                            setState(() {
-                              TURNSERVER = text;
-                              _prefs.setString('TURNSERVER', TURNSERVER);
-                            });
-                          },
-                          decoration: InputDecoration(
-                            hintText: TURNSERVER,
-                            labelText: 'TURN server',
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                    ),
-            ])),
-          actions: <Widget>[
-            TextButton(
-              child: Text('CANCEL',  // Removed const
-                style: TextStyle(
-                  color: ninjaAccentColor,
-                  fontWeight: FontWeight.bold
-                )
-              ),
-              onPressed: () {
-                Navigator.pop(context, DialogDemoAction.cancel);
-              }
-            ),
-            TextButton(
-              child: Text('CONNECT',  // Removed const
-                style: TextStyle(
-                  color: ninjaAccentColor,
-                  fontWeight: FontWeight.bold
-                )
-              ),
-              onPressed: () {
-                Navigator.pop(context, DialogDemoAction.connect);
-              }
-            )
-          ]
-      )
-    );
   }
   
   _initItems() async {

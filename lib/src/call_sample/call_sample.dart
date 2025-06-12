@@ -26,6 +26,8 @@ class CallSample extends StatefulWidget {
   final bool preview;
   final bool muted;
   final bool mirrored;
+  final int customBitrate;
+  final String customSalt;
 
   CallSample(
       {required Key key,
@@ -40,7 +42,9 @@ class CallSample extends StatefulWidget {
       required this.password,
       required this.preview,
       required this.muted,
-      required this.mirrored})
+      required this.mirrored,
+      this.customBitrate = 0,
+      this.customSalt = 'vdo.ninja'})
       : super(key: key);
 
   @override
@@ -366,7 +370,9 @@ class _CallSampleState extends State<CallSample> {
         widget.quality,
         widget.WSSADDRESS,
         finalTurnListForSignaling,
-        widget.password);
+        widget.password,
+        widget.customBitrate,
+        widget.customSalt);
 
     // Set up callbacks
     _signaling?.onSignalingStateChange = (SignalingState state) {
