@@ -150,87 +150,721 @@ class IosSilentAudioPlayer {
 }
 // --- End iOS Silent Audio Player ---
 
-
 class CodecsHandler {
-  static String setVideoBitrates(String sdp, Map<String, dynamic> params, [String? codec]) {
-    var sdpLines = sdp.split('\r\n');
-    final String maxBitrateStr = params['max'].toString();
-    final String minBitrateStr = params['min'].toString();
+  static String preferCodec(String sdp, String? codec, {bool useRed = false, bool useUlpfec = false}) {
+    if (codec != null) {
+      codec = codec.toLowerCase();
+    }
     
-    // Find the m line for video
-    final mLineIndex = _findLine(sdpLines, 'm=', 'video');
-    if (mLineIndex == null) {
+    final info = _splitLines(sdp);
+    if (info.videoCodecNumbers == null || info.videoCodecNumbers!.isEmpty) {
       return sdp;
     }
     
-    // Find appropriate codec payload
-    String codecPayload = '';
-    if (codec != null) {
-      final codecIndex = _findLine(sdpLines, 'a=rtpmap', codec.toUpperCase()+'/90000');
-      if (codecIndex != null) {
-        codecPayload = _getCodecPayloadType(sdpLines[codecIndex]);
+    String preferCodecNumber = '';
+    List<String> preferErrorCorrectionNumbers = [];
+    
+    if (codec == 'vp8') {
+      preferCodecNumber = info.vp8LineNumber ?? '';
+    } else if (codec == 'vp9') {
+      preferCodecNumber = info.vp9LineNumber ?? '';
+    } else if (codec == 'h264') {
+      preferCodecNumber = info.h264LineNumber ?? '';
+    } else if (codec == 'h265') {
+      preferCodecNumber = info.h265LineNumber ?? '';
+    } else if (codec == 'av1') {
+      preferCodecNumber = info.av1LineNumber ?? '';
+    } else if (codec == 'red') {
+      preferCodecNumber = info.redLineNumber ?? '';
+    } else if (codec == 'fec') {
+      preferCodecNumber = info.ulpfecLineNumber ?? '';
+    }
+    
+    if (useRed && info.redLineNumber != null) {
+      preferErrorCorrectionNumbers.add(info.redLineNumber!);
+    }
+    if (useUlpfec && info.ulpfecLineNumber != null) {
+      preferErrorCorrectionNumbers.add(info.ulpfecLineNumber!);
+    }
+    
+    if (preferCodecNumber.isEmpty) {
+      return sdp;
+    }
+    
+    List<String> newOrder = [preferCodecNumber, ...preferErrorCorrectionNumbers];
+    for (String codecNumber in info.videoCodecNumbers!) {
+      if (!newOrder.contains(codecNumber)) {
+        newOrder.add(codecNumber);
       }
     }
     
-    // If no specific codec requested, use the first video codec
-    if (codecPayload.isEmpty) {
-      final videoMLine = sdpLines[mLineIndex];
-      final pattern = RegExp(r'm=video\s\d+\s[A-Z/]+\s');
-      final parts = videoMLine.split(pattern);
-      if (parts.length > 1) {
-        final sendPayloadType = parts[1].split(' ')[0];
-        codecPayload = sendPayloadType;
-      } else {
-        // Handle SDP format variation
-        final simplePattern = RegExp(r'm=video\s\d+\s\w+\s');
-        final match = simplePattern.firstMatch(videoMLine);
-        if (match != null) {
-          final payloadSection = videoMLine.substring(match.end);
-          codecPayload = payloadSection.trim().split(' ')[0];
+    final parts = info.videoCodecNumbersOriginal!.split('SAVPF');
+    final newLine = '${parts[0]}SAVPF ${newOrder.join(' ')}';
+    sdp = sdp.replaceAll(info.videoCodecNumbersOriginal!, newLine);
+    
+    return sdp;
+  }
+  
+  static _CodecInfo _splitLines(String sdp) {
+    final info = _CodecInfo();
+    final lines = sdp.split('\n');
+    
+    for (String line in lines) {
+      if (line.indexOf('m=video') == 0) {
+        info.videoCodecNumbers = [];
+        final savpfParts = line.split('SAVPF');
+        if (savpfParts.length > 1) {
+          final codecNumbers = savpfParts[1].split(' ');
+          for (String codecNumber in codecNumbers) {
+            codecNumber = codecNumber.trim();
+            if (codecNumber.isNotEmpty) {
+              info.videoCodecNumbers!.add(codecNumber);
+            }
+          }
+          info.videoCodecNumbersOriginal = line;
         }
       }
-    }
-    
-    // Add b=AS line for overall session bandwidth
-    final asLineIndex = _findLine(sdpLines, 'b=AS:');
-    if (asLineIndex != null) {
-      // Update existing bandwidth line
-      sdpLines[asLineIndex] = 'b=AS:$maxBitrateStr';
-    } else {
-      // Add new bandwidth line after m= line
-      sdpLines.insert(mLineIndex + 1, 'b=AS:$maxBitrateStr');
       
-      // Add TIAS bandwidth line as well (Transport Independent Application Specific)
-      // TIAS is in bits per second, AS is in kilobits per second
-      final tiasBitrate = (int.parse(maxBitrateStr) * 1000).toString();
-      sdpLines.insert(mLineIndex + 2, 'b=TIAS:$tiasBitrate');
+      final upperLine = line.toUpperCase();
+      if (upperLine.contains('VP8/90000') && info.vp8LineNumber == null) {
+        info.vp8LineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (upperLine.contains('VP9/90000') && info.vp9LineNumber == null) {
+        info.vp9LineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (upperLine.contains('H264/90000') && info.h264LineNumber == null) {
+        info.h264LineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (upperLine.contains('H265/90000') && info.h265LineNumber == null) {
+        info.h265LineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if ((upperLine.contains('AV1X/90000') || upperLine.contains('AV1/90000')) && info.av1LineNumber == null) {
+        info.av1LineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (upperLine.contains('RED/90000') && info.redLineNumber == null) {
+        info.redLineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (upperLine.contains('ULPFEC/90000') && info.ulpfecLineNumber == null) {
+        info.ulpfecLineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
     }
     
-    // Find the a=fmtp line for the codec and add bitrate parameters
-    final fmtpLineIndex = _findLine(sdpLines, 'a=fmtp:$codecPayload');
-    if (fmtpLineIndex != null) {
-      String fmtpLine = sdpLines[fmtpLineIndex];
-      // Check if we already have bitrate params
-      if (!fmtpLine.contains('x-google-min-bitrate') && 
-          !fmtpLine.contains('x-google-max-bitrate')) {
-        
-        final bitrates = 'x-google-min-bitrate=$minBitrateStr;x-google-max-bitrate=$maxBitrateStr';
-        
-        if (fmtpLine.contains(';')) {
-          sdpLines[fmtpLineIndex] = fmtpLine + ';' + bitrates;
-        } else {
-          sdpLines[fmtpLineIndex] = fmtpLine + ' ' + bitrates;
+    return info;
+  }
+  
+  static String preferAudioCodec(String sdp, String? codec, {bool useRed = false, bool useUlpfec = false}) {
+    codec = codec?.toLowerCase();
+    final info = _splitAudioLines(sdp);
+    
+    if (info.audioCodecNumbers == null || info.audioCodecNumbers!.isEmpty) {
+      return sdp;
+    }
+    
+    String preferCodecNumber = '';
+    List<String> errorCorrectionNumbers = [];
+    
+    // Set preferred codec number
+    if (codec != null && info.codecLineNumbers[codec] != null) {
+      preferCodecNumber = info.codecLineNumbers[codec]!;
+    }
+    
+    // Handle RED/ULPFEC error correction
+    if (useRed && info.redLineNumber != null) {
+      if (info.redPcmLineNumber != null) {
+        errorCorrectionNumbers.add(info.redPcmLineNumber!);
+      } else if (info.redLineNumber != null) {
+        errorCorrectionNumbers.add(info.redLineNumber!);
+      }
+    }
+    if (useUlpfec && info.ulpfecLineNumber != null) {
+      errorCorrectionNumbers.add(info.ulpfecLineNumber!);
+    }
+    
+    // Set codec order: error correction + preferred codec + others
+    List<String> newOrder = [...errorCorrectionNumbers];
+    if (preferCodecNumber.isNotEmpty) {
+      newOrder.add(preferCodecNumber);
+    }
+    
+    for (String codecNumber in info.audioCodecNumbers!) {
+      if (!newOrder.contains(codecNumber)) {
+        newOrder.add(codecNumber);
+      }
+    }
+    
+    // Replace SDP line with updated codec order
+    final parts = info.audioCodecNumbersOriginal!.split('SAVPF');
+    final newLine = '${parts[0]}SAVPF ${newOrder.join(' ')}';
+    sdp = sdp.replaceAll(info.audioCodecNumbersOriginal!, newLine);
+    
+    return sdp;
+  }
+  
+  static _AudioCodecInfo _splitAudioLines(String sdp) {
+    final info = _AudioCodecInfo();
+    final lines = sdp.split('\n');
+    
+    for (String line in lines) {
+      if (line.indexOf('m=audio') == 0) {
+        info.audioCodecNumbers = [];
+        final savpfParts = line.split('SAVPF');
+        if (savpfParts.length > 1) {
+          final codecNumbers = savpfParts[1].split(' ');
+          for (String codecNumber in codecNumbers) {
+            codecNumber = codecNumber.trim();
+            if (codecNumber.isNotEmpty) {
+              info.audioCodecNumbers!.add(codecNumber);
+            }
+          }
+          info.audioCodecNumbersOriginal = line;
         }
       }
-    } else if (codecPayload.isNotEmpty) {
-      // If no a=fmtp line exists, create one
-      sdpLines.add('a=fmtp:$codecPayload x-google-min-bitrate=$minBitrateStr;x-google-max-bitrate=$maxBitrateStr');
+      
+      final lowerLine = line.toLowerCase();
+      if (lowerLine.contains('opus/48000') && info.codecLineNumbers['opus'] == null) {
+        info.codecLineNumbers['opus'] = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('isac/32000') && info.codecLineNumbers['isac'] == null) {
+        info.codecLineNumbers['isac'] = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('g722/8000') && info.codecLineNumbers['g722'] == null) {
+        info.codecLineNumbers['g722'] = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('pcmu/8000') && info.codecLineNumbers['pcmu'] == null) {
+        info.codecLineNumbers['pcmu'] = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('pcma/8000') && info.codecLineNumbers['pcma'] == null) {
+        info.codecLineNumbers['pcma'] = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('red/48000') && info.redLineNumber == null) {
+        info.redLineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('ulpfec/48000') && info.ulpfecLineNumber == null) {
+        info.ulpfecLineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('red/8000') && info.redPcmLineNumber == null) {
+        info.redPcmLineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+      if (lowerLine.contains('ulpfec/8000') && info.ulpfecLineNumber == null) {
+        info.ulpfecLineNumber = line.replaceAll('a=rtpmap:', '').split(' ')[0];
+      }
+    }
+    
+    return info;
+  }
+  
+  static String disableNACK(String sdp) {
+    if (sdp.isEmpty) {
+      throw 'Invalid arguments.';
+    }
+    
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) nack\r\n'), '');
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) nack pli\r\n'), r'a=rtcp-fb:$1 pli\r\n');
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) pli nack\r\n'), r'a=rtcp-fb:$1 pli\r\n');
+    
+    return sdp;
+  }
+  
+  static String disableREMB(String sdp) {
+    if (sdp.isEmpty) {
+      throw 'Invalid arguments.';
+    }
+    
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) goog-remb\r\n'), '');
+    
+    return sdp;
+  }
+  
+  static String disablePLI(String sdp) {
+    if (sdp.isEmpty) {
+      throw 'Invalid arguments.';
+    }
+    
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) pli\r\n'), '');
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) nack pli\r\n'), r'a=rtcp-fb:$1 nack\r\n');
+    sdp = sdp.replaceAll(RegExp(r'a=rtcp-fb:(\d+) pli nack\r\n'), r'a=rtcp-fb:$1 nack\r\n');
+    
+    return sdp;
+  }
+  
+  static int? _findLine(List<String> sdpLines, String prefix, [String? substr]) {
+    return _findLineInRange(sdpLines, 0, -1, prefix, substr);
+  }
+  
+  static int? _findLineInRange(List<String> sdpLines, int startLine, int endLine, String prefix, [String? substr]) {
+    final realEndLine = endLine != -1 ? endLine : sdpLines.length;
+    for (int i = startLine; i < realEndLine; i++) {
+      if (sdpLines[i].indexOf(prefix) == 0) {
+        if (substr == null || sdpLines[i].toLowerCase().contains(substr.toLowerCase())) {
+          return i;
+        }
+      }
+    }
+    return null;
+  }
+  
+  static String _getCodecPayloadType(String sdpLine) {
+    final pattern = RegExp(r'a=rtpmap:(\d+) \w+\/\d+');
+    final result = pattern.firstMatch(sdpLine);
+    return (result != null && result.groupCount >= 1) ? result.group(1)! : '';
+  }
+  
+  static int getVideoBitrates(String sdp) {
+    const defaultBitrate = 0;
+    
+    final sdpLines = sdp.split('\r\n');
+    final mLineIndex = _findLine(sdpLines, 'm=', 'video');
+    if (mLineIndex == null) {
+      return defaultBitrate;
+    }
+    
+    final videoMLine = sdpLines[mLineIndex];
+    final pattern = RegExp(r'm=video\s\d+\s[A-Z/]+\s');
+    final match = pattern.firstMatch(videoMLine);
+    if (match == null) {
+      return defaultBitrate;
+    }
+    
+    final remaining = videoMLine.substring(match.end);
+    final sendPayloadType = remaining.split(' ')[0];
+    
+    final rtpmapIndex = _findLine(sdpLines, 'a=rtpmap', sendPayloadType);
+    if (rtpmapIndex == null) {
+      return defaultBitrate;
+    }
+    
+    final fmtpLine = sdpLines[rtpmapIndex];
+    final codec = fmtpLine.split('a=rtpmap:$sendPayloadType')[1].split('/')[0];
+    
+    final codecIndex = _findLine(sdpLines, 'a=rtpmap', '$codec/90000');
+    String? codecPayload;
+    if (codecIndex != null) {
+      codecPayload = _getCodecPayloadType(sdpLines[codecIndex]);
+    }
+    
+    if (codecPayload == null || codecPayload.isEmpty) {
+      return defaultBitrate;
+    }
+    
+    final rtxIndex = _findLine(sdpLines, 'a=rtpmap', 'rtx/90000');
+    if (rtxIndex == null) {
+      return defaultBitrate;
+    }
+    
+    final rtxFmtpLineIndex = _findLine(sdpLines, 'a=fmtp:$codecPayload');
+    if (rtxFmtpLineIndex != null) {
+      try {
+        String line = sdpLines[rtxFmtpLineIndex];
+        if (line.contains('x-google-max-bitrate=')) {
+          final maxBitrateStr = line.split('x-google-max-bitrate=')[1].split(';')[0];
+          final maxBitrate = int.parse(maxBitrateStr);
+          
+          int minBitrate = 0;
+          if (line.contains('x-google-min-bitrate=')) {
+            final minBitrateStr = line.split('x-google-min-bitrate=')[1].split(';')[0];
+            minBitrate = int.parse(minBitrateStr);
+          }
+          
+          if (minBitrate > maxBitrate) {
+            return minBitrate;
+          }
+          return maxBitrate < 1 ? 1 : maxBitrate;
+        }
+      } catch (e) {
+        return defaultBitrate;
+      }
+    }
+    
+    return defaultBitrate;
+  }
+  
+  static String setVideoBitrates(String sdp, Map<String, dynamic>? params, [String? codec]) {
+    codec = codec?.toUpperCase() ?? 'VP8';
+    print("setVideoBitrates called with params: $params, codec: $codec");
+    
+    // First check if bitrate is already set in the SDP
+    final existingBitrate = parseBitrateFromSdp(sdp);
+    if (existingBitrate != null && existingBitrate > 0) {
+      print("setVideoBitrates: Bitrate already set in SDP: ${existingBitrate}kbps, not modifying");
+      return sdp;
+    }
+    
+    var sdpLines = sdp.split('\r\n');
+    
+    // Search for m line
+    final mLineIndex = _findLine(sdpLines, 'm=', 'video');
+    if (mLineIndex == null) {
+      print("setVideoBitrates: No video m-line found in SDP");
+      return sdp;
+    }
+    
+    // Figure out the first codec payload type on the m=video SDP line
+    final videoMLine = sdpLines[mLineIndex];
+    final pattern = RegExp(r'm=video\s\d+\s[A-Z/]+\s');
+    final match = pattern.firstMatch(videoMLine);
+    
+    if (match != null) {
+      final remaining = videoMLine.substring(match.end);
+      final sendPayloadType = remaining.split(' ')[0];
+      final rtpmapIndex = _findLine(sdpLines, 'a=rtpmap', sendPayloadType);
+      
+      if (rtpmapIndex != null) {
+        final fmtpLine = sdpLines[rtpmapIndex];
+        final codecName = fmtpLine.split('a=rtpmap:$sendPayloadType')[1].split('/')[0];
+        codec = codecName.isNotEmpty ? codecName : codec;
+      }
+    }
+    
+    params = params ?? {};
+    
+    final minBitrate = params['min']?.toString() ?? '30';
+    final maxBitrate = params['max']?.toString() ?? '2500';
+    
+    final codecIndex = _findLine(sdpLines, 'a=rtpmap', '$codec/90000');
+    String? codecPayload;
+    if (codecIndex != null) {
+      codecPayload = _getCodecPayloadType(sdpLines[codecIndex]);
+    }
+    
+    if (codecPayload == null || codecPayload.isEmpty) {
+      print("setVideoBitrates: No codec payload found");
+      return sdp;
+    }
+    
+    print("setVideoBitrates: Found codec payload: $codecPayload for codec: $codec");
+    
+    final rtxIndex = _findLine(sdpLines, 'a=rtpmap', 'rtx/90000');
+    String? rtxPayload;
+    if (rtxIndex != null) {
+      rtxPayload = _getCodecPayloadType(sdpLines[rtxIndex]);
+    }
+    
+    if (rtxIndex == null) {
+      print("setVideoBitrates: No RTX found, adding bandwidth constraints after m=video line");
+      // Insert multiple bandwidth constraints for better compatibility
+      sdpLines.insert(mLineIndex + 1, 'b=AS:$maxBitrate');
+      sdpLines.insert(mLineIndex + 2, 'b=CT:$maxBitrate');  // Conference Total
+      sdpLines.insert(mLineIndex + 3, 'b=TIAS:${maxBitrate * 1000}');  // Transport Independent Application Specific (in bits)
+      
+      final modifiedSdp = sdpLines.join('\r\n');
+      
+      // Verify the modification
+      final verifyBitrate = parseBitrateFromSdp(modifiedSdp);
+      print("setVideoBitrates: Verification - bitrate is now ${verifyBitrate}kbps");
+      
+      return modifiedSdp;
+    }
+    
+    final rtxFmtpLineIndex = _findLine(sdpLines, 'a=fmtp:$rtxPayload');
+    if (rtxFmtpLineIndex != null) {
+      var appendrtxNext = '\r\n';
+      appendrtxNext += 'a=fmtp:$codecPayload x-google-min-bitrate=$minBitrate; x-google-max-bitrate=$maxBitrate';
+      sdpLines[rtxFmtpLineIndex] = sdpLines[rtxFmtpLineIndex] + appendrtxNext;
+      print("setVideoBitrates: Added x-google-min-bitrate=$minBitrate; x-google-max-bitrate=$maxBitrate");
+      
+      // Also add b=AS line for better compatibility
+      sdpLines.insert(mLineIndex + 1, 'b=AS:$maxBitrate');
+      print("setVideoBitrates: Also added b=AS:$maxBitrate for compatibility");
+    } else {
+      print("setVideoBitrates: No RTX fmtp line found, adding b=AS:$maxBitrate");
+      // Fallback: add b=AS line if we can't add fmtp parameters
+      sdpLines.insert(mLineIndex + 1, 'b=AS:$maxBitrate');
+    }
+    
+    final modifiedSdp = sdpLines.join('\r\n');
+    
+    // Verify the modification
+    final verifyBitrate = parseBitrateFromSdp(modifiedSdp);
+    print("setVideoBitrates: Verification - bitrate is now ${verifyBitrate}kbps");
+    
+    return modifiedSdp;
+  }
+  
+  static List<String> _processOpus(List<String> sdpLines, String opusPayload, int opusIndex, 
+      String codecType, Map<String, dynamic> params, bool debug) {
+    final opusFmtpLineIndex = _findLine(sdpLines, 'a=fmtp:$opusPayload');
+    if (opusFmtpLineIndex == null) {
+      return sdpLines;
+    }
+    
+    var appendOpusNext = '';
+    
+    if (params.containsKey('minptime') && params['minptime'] != false) {
+      appendOpusNext += ';minptime:${params['minptime']}';
+    }
+    
+    if (params.containsKey('maxptime') && params['maxptime'] != false) {
+      appendOpusNext += ';maxptime:${params['maxptime']}';
+    }
+    
+    if (params.containsKey('ptime') && params['ptime'] != false) {
+      appendOpusNext += ';ptime:${params['ptime']}';
+    }
+    
+    if (params.containsKey('stereo')) {
+      // Remove existing stereo settings
+      sdpLines[opusFmtpLineIndex] = sdpLines[opusFmtpLineIndex]
+          .replaceAll(RegExp(r';stereo=[01]'), '')
+          .replaceAll(RegExp(r';sprop-stereo=[01]'), '');
+      
+      if (params['stereo'] == 1) {
+        appendOpusNext += ';stereo=1;sprop-stereo=1';
+      } else if (params['stereo'] == 0) {
+        appendOpusNext += ';stereo=0;sprop-stereo=0';
+      } else if (params['stereo'] == 2 && codecType == 'OPUS') {
+        sdpLines[opusIndex] = sdpLines[opusIndex].replaceAll('opus/48000/2', 'multiopus/48000/6');
+        appendOpusNext += ';channel_mapping=0,4,1,2,3,5;num_streams=4;coupled_streams=2';
+      } else if (params['stereo'] == 3 && codecType == 'OPUS') {
+        sdpLines[opusIndex] = sdpLines[opusIndex].replaceAll('opus/48000/2', 'multiopus/48000/8');
+        appendOpusNext += ';channel_mapping=0,6,1,2,3,4,5,7;num_streams=5;coupled_streams=4';
+      }
+    }
+    
+    if (params.containsKey('maxaveragebitrate')) {
+      if (!sdpLines[opusFmtpLineIndex].contains('maxaveragebitrate=')) {
+        appendOpusNext += ';maxaveragebitrate=${params['maxaveragebitrate']}';
+      }
+    }
+    
+    if (params.containsKey('maxplaybackrate')) {
+      if (!sdpLines[opusFmtpLineIndex].contains('maxplaybackrate=')) {
+        appendOpusNext += ';maxplaybackrate=${params['maxplaybackrate']}';
+      }
+    }
+    
+    if (params.containsKey('cbr')) {
+      if (!sdpLines[opusFmtpLineIndex].contains('cbr=')) {
+        appendOpusNext += ';cbr=${params['cbr']}';
+      }
+    }
+    
+    if (params.containsKey('dtx') && params['dtx'] == true) {
+      if (!sdpLines[opusFmtpLineIndex].contains('usedtx=')) {
+        appendOpusNext += ';usedtx=1';
+      }
+    }
+    
+    if (params.containsKey('useinbandfec')) {
+      if (!sdpLines[opusFmtpLineIndex].contains('useinbandfec=')) {
+        appendOpusNext += ';useinbandfec=${params['useinbandfec']}';
+      } else {
+        final oldValue = params['useinbandfec'] == 1 ? 0 : 1;
+        sdpLines[opusFmtpLineIndex] = sdpLines[opusFmtpLineIndex]
+            .replaceAll('useinbandfec=$oldValue', 'useinbandfec=${params['useinbandfec']}');
+      }
+    }
+    
+    if (appendOpusNext.isNotEmpty) {
+      sdpLines[opusFmtpLineIndex] = sdpLines[opusFmtpLineIndex] + appendOpusNext;
+    }
+    
+    if (debug) {
+      print('Adding to SDP ($codecType): $appendOpusNext --> Result: ${sdpLines[opusFmtpLineIndex]}');
+    }
+    
+    return sdpLines;
+  }
+  
+  static String setOpusAttributes(String sdp, Map<String, dynamic>? params, {bool debug = false}) {
+    params = params ?? {};
+    
+    var sdpLines = sdp.split('\r\n');
+    
+    final opusIndex = _findLine(sdpLines, 'a=rtpmap', 'opus/48000');
+    String? opusPayload;
+    if (opusIndex != null) {
+      opusPayload = _getCodecPayloadType(sdpLines[opusIndex]);
+    }
+    
+    final redIndex = _findLine(sdpLines, 'a=rtpmap', 'red/48000');
+    String? redPayload;
+    if (redIndex != null) {
+      redPayload = _getCodecPayloadType(sdpLines[redIndex]);
+    }
+    
+    if ((opusPayload == null || opusPayload.isEmpty) && 
+        (redPayload == null || redPayload.isEmpty)) {
+      return sdp;
+    }
+    
+    if (opusPayload != null && opusPayload.isNotEmpty) {
+      if (debug) print('Processing OPUS codec');
+      sdpLines = _processOpus(sdpLines, opusPayload, opusIndex!, 'OPUS', params, debug);
+    }
+    
+    if (redPayload != null && redPayload.isNotEmpty) {
+      if (debug) print('Processing RED codec');
+      sdpLines = _processOpus(sdpLines, redPayload, redIndex!, 'RED', params, debug);
     }
     
     return sdpLines.join('\r\n');
   }
   
-  // Parse bitrate from incoming SDP
+  static int getOpusBitrate(String sdp) {
+    final sdpLines = sdp.split('\r\n');
+    
+    final opusIndex = _findLine(sdpLines, 'a=rtpmap', 'opus/48000');
+    String? opusPayload;
+    if (opusIndex != null) {
+      opusPayload = _getCodecPayloadType(sdpLines[opusIndex]);
+    }
+    
+    if (opusPayload == null || opusPayload.isEmpty) {
+      return 0;
+    }
+    
+    final opusFmtpLineIndex = _findLine(sdpLines, 'a=fmtp:$opusPayload');
+    if (opusFmtpLineIndex == null) {
+      return 0;
+    }
+    
+    final line = sdpLines[opusFmtpLineIndex];
+    if (line.contains('maxaveragebitrate=')) {
+      try {
+        var tmp = line.split('maxaveragebitrate=')[1];
+        tmp = tmp.split('\r')[0];
+        tmp = tmp.split('\n')[0];
+        tmp = tmp.split(';')[0];
+        return int.parse(tmp);
+      } catch (e) {
+        return 32768;
+      }
+    }
+    
+    return 32768;
+  }
+  
+  static String modifyDescLyra(String modifiedSDP) {
+    if (!modifiedSDP.contains('m=audio')) {
+      return modifiedSDP;
+    }
+    
+    modifiedSDP = modifiedSDP
+        .replaceAll('SAVPF 111', 'SAVPF 109 111')
+        .replaceAll('a=rtpmap:111', 'a=rtpmap:109 L16/16000/1\r\na=fmtp:109 ptime=20\r\na=rtpmap:111');
+    
+    modifiedSDP = modifiedSDP
+        .replaceAll('a=rtpmap:106 CN/32000\r\n', '')
+        .replaceAll('a=rtpmap:105 CN/16000\r\n', '')
+        .replaceAll('a=rtpmap:13 CN/8000\r\n', '')
+        .replaceAll(' 106 105 13', '');
+    
+    return modifiedSDP;
+  }
+  
+  static String modifyDescPCM(String modifiedSDP, {int rate = 32000, bool stereo = false, int? ptimeOverride}) {
+    if (!modifiedSDP.contains('m=audio')) {
+      return modifiedSDP;
+    }
+    
+    int ptime = 10;
+    if (ptimeOverride != null) {
+      ptime = ptimeOverride;
+    }
+    ptime = (ptime ~/ 10) * 10;
+    if (ptime < 10) {
+      ptime = 10;
+    }
+    
+    if (!stereo && rate >= 48000) {
+      rate = 48000;
+      ptime = 10;
+    } else if (!stereo && rate >= 44100) {
+      rate = 44100;
+      ptime = 10;
+    } else if (rate >= 32000) {
+      rate = 32000;
+      if (stereo) {
+        ptime = 10;
+      } else if (ptime > 20) {
+        ptime = 20;
+      }
+    } else if (rate >= 16000) {
+      rate = 16000;
+      if (stereo) {
+        if (ptime > 20) {
+          ptime = 20;
+        }
+      } else if (ptime > 40) {
+        ptime = 40;
+      }
+    } else {
+      rate = 8000;
+      if (stereo) {
+        if (ptime > 40) {
+          ptime = 40;
+        }
+      }
+    }
+    
+    final channels = stereo ? '2' : '1';
+    modifiedSDP = modifiedSDP
+        .replaceAll('SAVPF 111', 'SAVPF 109 111')
+        .replaceAll('a=rtpmap:111', 'a=rtpmap:109 L16/$rate/$channels\r\na=fmtp:109 ptime=$ptime\r\na=rtpmap:111');
+    
+    modifiedSDP = modifiedSDP
+        .replaceAll('a=rtpmap:106 CN/32000\r\n', '')
+        .replaceAll('a=rtpmap:105 CN/16000\r\n', '')
+        .replaceAll('a=rtpmap:13 CN/8000\r\n', '')
+        .replaceAll(' 106 105 13', '');
+    
+    return modifiedSDP;
+  }
+  
+  static String modifySdp(String sdp, {bool disableAudio = false, bool disableVideo = false}) {
+    if (sdp.isEmpty) {
+      throw 'Invalid arguments.';
+    }
+    
+    final sdpLines = sdp.split('\r\n');
+    final modifiedLines = <String>[];
+    bool inAudioSection = false;
+    bool inVideoSection = false;
+    final bundleIds = <String>[];
+    
+    for (String line in sdpLines) {
+      if (line.startsWith('m=audio')) {
+        inAudioSection = true;
+        inVideoSection = false;
+        if (!disableAudio) {
+          modifiedLines.add(line);
+          bundleIds.add('0');
+        }
+      } else if (line.startsWith('m=video')) {
+        inAudioSection = false;
+        inVideoSection = true;
+        if (!disableVideo) {
+          modifiedLines.add(line);
+          bundleIds.add('1');
+        } else {
+          modifiedLines.add(''); // Add a line break if video is disabled
+        }
+      } else if (inVideoSection && disableVideo) {
+        continue; // Skip video lines if video is disabled
+      } else if (line.startsWith('a=group:')) {
+        // Skip existing group lines, we'll add updated ones later
+      } else if (inAudioSection && disableAudio) {
+        // Skip audio lines if audio is disabled
+      } else {
+        modifiedLines.add(line);
+      }
+    }
+    
+    final tLineIndex = modifiedLines.indexWhere((line) => line.startsWith('t='));
+    if (bundleIds.isNotEmpty && tLineIndex != -1) {
+      modifiedLines.insert(tLineIndex + 1, 'a=group:BUNDLE ${bundleIds.join(' ')}');
+      modifiedLines.insert(tLineIndex + 2, 'a=group:LS ${bundleIds.join(' ')}');
+    }
+    
+    // Ensure there's a line break at the end
+    if (modifiedLines.isNotEmpty && modifiedLines.last.isNotEmpty) {
+      modifiedLines.add('');
+    }
+    
+    return modifiedLines.join('\r\n');
+  }
+  
+  // Parse bitrate from incoming SDP (addition to match your original Dart code)
   static int? parseBitrateFromSdp(String sdp) {
     var sdpLines = sdp.split('\r\n');
     
@@ -269,27 +903,29 @@ class CodecsHandler {
     
     return null;
   }
-  
-  // Helper method to find a line in SDP
-  static int? _findLine(List<String> sdpLines, String prefix, [String? substr]) {
-    for (int i = 0; i < sdpLines.length; i++) {
-      if (sdpLines[i].startsWith(prefix)) {
-        if (substr == null || sdpLines[i].toLowerCase().contains(substr.toLowerCase())) {
-          return i;
-        }
-      }
-    }
-    return null;
-  }
-  
-  // Helper to get codec payload type
-  static String _getCodecPayloadType(String sdpLine) {
-    final pattern = RegExp(r'a=rtpmap:(\d+) \w+\/\d+');
-    final match = pattern.firstMatch(sdpLine);
-    return match != null ? match.group(1)! : '';
-  }
 }
 
+// Helper classes for codec information
+class _CodecInfo {
+  List<String>? videoCodecNumbers;
+  String? videoCodecNumbersOriginal;
+  String? vp8LineNumber;
+  String? vp9LineNumber;
+  String? h264LineNumber;
+  String? h265LineNumber;
+  String? av1LineNumber;
+  String? redLineNumber;
+  String? ulpfecLineNumber;
+}
+
+class _AudioCodecInfo {
+  List<String>? audioCodecNumbers;
+  String? audioCodecNumbersOriginal;
+  Map<String, String> codecLineNumbers = {};
+  String? redLineNumber;
+  String? ulpfecLineNumber;
+  String? redPcmLineNumber;
+}
 
 /*
  * Callbacks for Signaling API.
@@ -368,6 +1004,8 @@ class Signaling {
     this.customBitrate = customBitrate;
     if (customBitrate > 0) {
       print("Custom bitrate set to ${customBitrate}kbps");
+    } else {
+      print("No custom bitrate specified, will use defaults (720p: 6000kbps, 1080p: 10000kbps)");
     }
     print("Using custom salt: ${this.salt}");
     this.TURNLIST = turnList.isNotEmpty
@@ -665,18 +1303,40 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
   int getTargetBitrate() {
     // Priority: SDP bitrate > custom bitrate > default based on quality
     if (sdpBitrate > 0) {
+      print("Using SDP bitrate: ${sdpBitrate}kbps");
       return sdpBitrate;
     }
     
     if (customBitrate > 0) {
+      print("Using custom bitrate: ${customBitrate}kbps");
       return customBitrate;
     }
     
     // Default bitrates: 6mbps for 720p, 10mbps for 1080p
-    return quality ? 10000 : 6000;
+    int defaultBitrate = quality ? 10000 : 6000;
+    print("Using default bitrate: ${defaultBitrate}kbps (quality: $quality)");
+    return defaultBitrate;
   }
   
   // --- End Video Bitrate Control ---
+  
+  // Trigger renegotiation to apply new bitrate settings
+  Future<void> _triggerRenegotiation(String remoteUuid, RTCPeerConnection pc) async {
+    try {
+      print("Triggering renegotiation for $remoteUuid to apply bitrate changes");
+      
+      // Check if we can renegotiate
+      if (pc.signalingState != RTCSignalingState.RTCSignalingStateStable) {
+        print("Cannot renegotiate: signaling state is not stable");
+        return;
+      }
+      
+      // Create a new offer with updated bitrate
+      await _createOffer(remoteUuid, _sessionID[remoteUuid]!, pc);
+    } catch (e) {
+      print("Error triggering renegotiation: $e");
+    }
+  }
 
   // --- WebSocket and PeerConnection Management ---
   JsonEncoder _encoder = JsonEncoder();
@@ -685,7 +1345,10 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
   bool _isSocketConnected = false;
   // var _port = 443; // Not used directly if WSSADDRESS includes port
   var _sessions = <String, RTCPeerConnection>{}; // Explicit type
+  var _remoteSDPs = <String, String>{}; // Store remote SDPs by UUID
   var _sessionID = <String, String>{}; // Explicit type
+  var _lowBitrateCount = <String, int>{}; // Track low bitrate occurrences per peer
+  var _peerBitrates = <String, int>{}; // Store per-peer bitrate preferences
 
   List<MediaStream> _remoteStreams =
       <MediaStream>[]; // Keep if needed for remote streams
@@ -842,11 +1505,29 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
     String sdp = descriptionMap['sdp'];
     String type = descriptionMap['type'];
     
+    // Store the original remote SDP for later reference
+    _remoteSDPs[remoteUuid] = sdp;
+    
     // Parse bitrate from incoming SDP
     final parsedBitrate = CodecsHandler.parseBitrateFromSdp(sdp);
     if (parsedBitrate != null && parsedBitrate > 0) {
       print("Parsed bitrate from incoming SDP: ${parsedBitrate}kbps");
       sdpBitrate = parsedBitrate;
+    }
+    
+    // If this is an answer and it doesn't have bitrate, add our default bitrate
+    if (type == 'answer' && _localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+      if (parsedBitrate == null || parsedBitrate == 0) {
+        print("Answer does not have bitrate, applying our default");
+        int targetBitrate = customBitrate > 0 ? customBitrate : (quality ? 10000 : 6000);
+        final params = {'min': (targetBitrate * 0.8).round(), 'max': targetBitrate};
+        sdp = CodecsHandler.setVideoBitrates(sdp, params);
+        print("Modified answer SDP with bitrate: min=${params['min']}kbps, max=${params['max']}kbps");
+        
+        // Verify the bitrate was added
+        final verifyBitrate = CodecsHandler.parseBitrateFromSdp(sdp);
+        print("Verification: answer SDP now has bitrate: ${verifyBitrate}kbps");
+      }
     }
     
     var description = RTCSessionDescription(sdp, type);
@@ -864,13 +1545,7 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
       } else {
         // It was an answer
         print("Received answer from $remoteUuid.");
-        
-        // If we parsed bitrate from the answer and we're sending video, apply it
-        if (parsedBitrate != null && parsedBitrate > 0 && 
-            _localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-          print("Applying parsed bitrate ${parsedBitrate}kbps from answer to our video sender");
-          await setVideoBitrate(pc, parsedBitrate);
-        }
+        // Bitrate has already been handled above when modifying the SDP
       }
     } catch (e) {
       print("ERROR setting remote description for $remoteUuid: $e");
@@ -884,6 +1559,15 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
 void _cleanupPeerConnection(String remoteUuid) {
   final pc = _sessions.remove(remoteUuid);
   _sessionID.remove(remoteUuid);
+  _remoteSDPs.remove(remoteUuid); // Clean up stored remote SDP
+  _lowBitrateCount.remove(remoteUuid); // Clean up bitrate tracking
+  _peerBitrates.remove(remoteUuid); // Clean up per-peer bitrate
+  
+  // Clear sdpBitrate when cleaning up the last connection
+  if (_sessions.isEmpty) {
+    print("Last peer connection closed, clearing sdpBitrate");
+    sdpBitrate = 0;
+  }
   
   if (pc != null) {
     try {
@@ -1209,29 +1893,22 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
       RTCSessionDescription s = await pc.createOffer(_sdpConstraints);
       print("DEBUG: Offer SDP created successfully");
       
-      // Set local description
-      print("DEBUG: Setting local description...");
-      await pc.setLocalDescription(s);
+      // Don't modify offer SDP - just use it as is
+      print("DEBUG: Creating offer without modifying bitrate (will be set in answer)");
+      
+      // Use original offer without modification
+      RTCSessionDescription modifiedOffer = RTCSessionDescription(s.sdp, s.type);
+      
+      // Set local description with modified SDP
+      print("DEBUG: Setting local description with bitrate constraints...");
+      await pc.setLocalDescription(modifiedOffer);
       print("DEBUG: Local description set successfully");
-      
-      // Apply bitrate using SDP manipulation
-      String sdp = s.sdp!;
-      if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-        // Get target bitrate
-        int targetBitrate = getTargetBitrate();
-        final params = {'min': (targetBitrate * 0.1).round(), 'max': targetBitrate};
-        sdp = CodecsHandler.setVideoBitrates(sdp, params);
-        print("DEBUG: Modified SDP with bitrate constraints: ${targetBitrate}kbps");
-      }
-      
-      // Create modified description with updated SDP
-      RTCSessionDescription description = RTCSessionDescription(sdp, s.type);
       
       // Prepare to send the offer
       print("DEBUG: Preparing to send offer");
       var request = <String, dynamic>{};
       request["UUID"] = remoteUuid;
-      request["description"] = {'sdp': description.sdp, 'type': description.type};
+      request["description"] = modifiedOffer.toMap(); // Use modified offer
       request["session"] = sessionId;
       request["streamID"] = streamID + hashcode;
       
@@ -1424,12 +2101,45 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
           final packetsLost = report.values['packetsLost'] ?? 0;
           
           if (bytesSent != null && packetsSent != null) {
+            final currentTime = DateTime.now().millisecondsSinceEpoch;
+            final previousStats = _networkStats[remoteUuid];
+            
             _networkStats[remoteUuid] = {
               'bytesSent': bytesSent,
               'packetsSent': packetsSent,
               'packetsLost': packetsLost,
-              'timestamp': DateTime.now().millisecondsSinceEpoch,
+              'timestamp': currentTime,
             };
+            
+            // Calculate current bitrate if we have previous stats
+            if (previousStats != null && previousStats['bytesSent'] != null) {
+              final timeDiff = (currentTime - previousStats['timestamp']) / 1000.0; // seconds
+              if (timeDiff > 0) {
+                final bytesDiff = bytesSent - previousStats['bytesSent'];
+                final currentBitrateKbps = (bytesDiff * 8 / timeDiff / 1000).round();
+                
+                // Check if current bitrate is significantly below target
+                final targetBitrate = getTargetBitrate();
+                if (currentBitrateKbps < targetBitrate * 0.7 && currentBitrateKbps > 0) {
+                  print("Warning: Current bitrate ${currentBitrateKbps}kbps is below target ${targetBitrate}kbps for $remoteUuid");
+                  
+                  // If bitrate is too low for too long, trigger renegotiation
+                  final lowBitrateCount = (_lowBitrateCount[remoteUuid] ?? 0) + 1;
+                  _lowBitrateCount[remoteUuid] = lowBitrateCount;
+                  
+                  if (lowBitrateCount > 3) { // After 3 consecutive low readings
+                    print("Triggering renegotiation due to persistent low bitrate");
+                    _lowBitrateCount[remoteUuid] = 0;
+                    final pc = _sessions[remoteUuid];
+                    if (pc != null && pc.signalingState == RTCSignalingState.RTCSignalingStateStable) {
+                      _triggerRenegotiation(remoteUuid, pc);
+                    }
+                  }
+                } else {
+                  _lowBitrateCount[remoteUuid] = 0; // Reset counter
+                }
+              }
+            }
             
             // Calculate packet loss rate
             if (packetsSent > 0) {
@@ -1832,18 +2542,11 @@ Future<void> _createOffer(String remoteUuid, String sessionId, RTCPeerConnection
       return;
     }
     
-    // Apply bitrate modification
-    int targetBitrate = getTargetBitrate();
-    int minBitrate = targetBitrate ~/ 5; // Set minimum to 20% of target
+    // Don't modify offer SDP - bitrate will be set in answer
+    print("Creating offer without modifying bitrate (will be set in answer)");
     
-    final params = {'min': minBitrate, 'max': targetBitrate};
-    print("Setting video bitrates: min=${params['min']}kbps, max=${params['max']}kbps");
-    
-    String sdp = offer.sdp!;
-    sdp = CodecsHandler.setVideoBitrates(sdp, params);
-    
-    // Create modified offer
-    RTCSessionDescription modifiedOffer = RTCSessionDescription(sdp, offer.type);
+    // Use original offer without modification
+    RTCSessionDescription modifiedOffer = RTCSessionDescription(offer.sdp, offer.type);
     
     // Check PC state again before setting local description
     if (pc.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateClosed || 
@@ -1923,21 +2626,52 @@ Future<bool> _isHighPerformanceDevice() async {
 		try {
 		  RTCSessionDescription s =
 			  await pc.createAnswer(_sdpConstraints); // Use defined constraints
-		  print("Answer created. Setting local description for $remoteUuid.");
-		  await pc.setLocalDescription(s);
-		  print("Local description set for $remoteUuid.");
+		  print("Answer created. Processing SDP for bitrate...");
 		  
-		  // Apply bitrate using RTCRtpSender if we have video tracks
-		  if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-		    // Get target bitrate (which now includes parsed SDP bitrate)
-		    int targetBitrate = getTargetBitrate();
-		    await setVideoBitrate(pc, targetBitrate);
-		    print("Set video bitrate to ${targetBitrate}kbps for answer");
+		  // Apply bitrate to SDP before setting local description
+		  String sdp = s.sdp!;
+		  
+		  // Check if the offer already specified a bitrate
+		  final remoteSdp = _remoteSDPs[remoteUuid] ?? '';
+		  final offerBitrate = CodecsHandler.parseBitrateFromSdp(remoteSdp);
+		  
+		  int targetBitrate;
+		  if (offerBitrate != null && offerBitrate > 0) {
+		    print("Offer specified bitrate: ${offerBitrate}kbps, respecting it in answer");
+		    // Use the viewer's requested bitrate
+		    targetBitrate = offerBitrate;
+		    _peerBitrates[remoteUuid] = offerBitrate; // Store per-peer bitrate
+		  } else {
+		    print("Offer did not specify bitrate, using our default");
+		    // Use our default bitrate
+		    targetBitrate = customBitrate > 0 ? customBitrate : (quality ? 10000 : 6000);
+		    _peerBitrates[remoteUuid] = targetBitrate; // Store our default for this peer
 		  }
+		  
+		  if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+		    // Set minimum to 80% of target for more aggressive bitrate
+		    final params = {'min': (targetBitrate * 0.8).round(), 'max': targetBitrate};
+		    sdp = CodecsHandler.setVideoBitrates(sdp, params);
+		    print("Modified answer SDP with bitrate: min=${params['min']}kbps, max=${params['max']}kbps");
+		    
+		    // Force resolution constraints
+		    if (quality) {
+		      sdp = sdp.replaceAll('a=rtpmap:96 VP8/90000', 
+		                           'a=rtpmap:96 VP8/90000\r\na=fmtp:96 max-fs=8160;max-fr=30');
+		    } else {
+		      sdp = sdp.replaceAll('a=rtpmap:96 VP8/90000', 
+		                           'a=rtpmap:96 VP8/90000\r\na=fmtp:96 max-fs=3600;max-fr=30');
+		    }
+		  }
+		  
+		  // Create modified description and set it
+		  RTCSessionDescription modifiedAnswer = RTCSessionDescription(sdp, s.type);
+		  await pc.setLocalDescription(modifiedAnswer);
+		  print("Local description set for $remoteUuid with bitrate constraints.");
 
 		  var request = <String, dynamic>{};
 		  request["UUID"] = remoteUuid; // Target
-		  request["description"] = s.toMap(); // Use toMap()
+		  request["description"] = modifiedAnswer.toMap(); // Use modified answer
 		  request["session"] = sessionId;
 		  request["streamID"] = streamID + hashcode;
 		  if (UUID.isNotEmpty) request["from"] = UUID; // Sender
@@ -2016,6 +2750,11 @@ Future<bool> _isHighPerformanceDevice() async {
     // Clear rate limiting data
     _lastConnectionAttempts.clear();
     _networkStats.clear();
+    
+    // Clear stored remote SDPs and bitrate tracking
+    _remoteSDPs.clear();
+    _lowBitrateCount.clear();
+    _peerBitrates.clear();
 
     // Dispose iOS silent audio player first
     if (Platform.isIOS) {
@@ -2111,12 +2850,12 @@ Future<bool> _isHighPerformanceDevice() async {
     customBitrate = bitrateKbps;
     print("Custom bitrate set to ${bitrateKbps}kbps");
     
-    // Apply to all active connections
+    // Apply to all active connections by triggering renegotiation
     for (var entry in _sessions.entries) {
       if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
         int targetBitrate = getTargetBitrate();
-        await setVideoBitrate(entry.value, targetBitrate);
-        print("Updated bitrate to ${targetBitrate}kbps for ${entry.key}");
+        print("Triggering renegotiation to apply bitrate ${targetBitrate}kbps for ${entry.key}");
+        await _triggerRenegotiation(entry.key, entry.value);
       }
     }
   }

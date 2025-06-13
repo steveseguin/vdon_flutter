@@ -77,6 +77,13 @@ void main() {
     
     // Initialize notifications first
     await initializeNotifications();
+    
+    // Temporarily disabled - TODO: Fix foreground service
+    /*
+    if (Platform.isAndroid) {
+      await configureBackgroundService();
+    }
+    */
 
     if (WebRTC.platformIsDesktop) {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
@@ -101,7 +108,7 @@ void main() {
 const notificationChannelId = 'vdo_ninja_foreground';
 const notificationId = 888;
 
-Future<bool> startForegroundService() async {
+Future<void> configureBackgroundService() async {
   final service = FlutterBackgroundService();
   
   if (Platform.isAndroid) {
@@ -121,15 +128,21 @@ Future<bool> startForegroundService() async {
         ?.createNotificationChannel(channel);
   }
   
+  // Configure the service only once at startup
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStartBackground,
-      autoStart: true,
+      autoStart: false,  // Don't auto-start
       isForegroundMode: true,
       notificationChannelId: notificationChannelId,
       initialNotificationTitle: 'VDO.Ninja running in background',
       initialNotificationContent: 'Tap to return to app',
       foregroundServiceNotificationId: notificationId,
+      foregroundServiceTypes: [
+        AndroidForegroundType.camera,
+        AndroidForegroundType.microphone,
+        AndroidForegroundType.mediaProjection,
+      ],
     ),
     iosConfiguration: IosConfiguration(
       autoStart: true,
@@ -137,8 +150,12 @@ Future<bool> startForegroundService() async {
       onBackground: onIosBackground,
     ),
   );
+}
 
-  return await service.isRunning();
+Future<bool> startForegroundService() async {
+  final service = FlutterBackgroundService();
+  // Just start the already configured service
+  return await service.startService();
 }
 
 @pragma('vm:entry-point')
@@ -147,28 +164,58 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 }
 
 @pragma('vm:entry-point')
-void onStartBackground(ServiceInstance service) {
+Future<void> onStartBackground(ServiceInstance service) async {
+  // Initialize Flutter widgets binding for isolate
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize notifications in the isolate
+  await initializeNotifications();
+  
+  // For Android 12+ we need to immediately show a notification
   if (service is AndroidServiceInstance) {
+    // Set as foreground service first
+    service.setAsForegroundService();
+    
+    // Show notification immediately  
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      notificationChannelId,
+      'VDO.Ninja Service',
+      channelDescription: 'Enables background audio/video streaming',
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      showWhen: false,
+      enableVibration: false,
+    );
+    
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+    );
+    
+    // Show notification directly through flutter_local_notifications
+    await flutterLocalNotificationsPlugin.show(
+      notificationId,
+      'VDO.Ninja is running in background',
+      'Tap to return to the app',
+      notificationDetails,
+    );
+    
+    // Also set through the service
+    service.setForegroundNotificationInfo(
+      title: 'VDO.Ninja is running in background',
+      content: 'Tap to return to the app',
+    );
+    
     service.on('stopService').listen((event) {
       service.stopSelf();
     });
-    
-    // Initialize the notification with a better UX message
-    try {
-      service.setForegroundNotificationInfo(
-        title: 'VDO.Ninja is running in background',
-        content: 'Tap to return to the app',
-      );
-    } catch (e) {
-      print('Error setting initial notification: $e');
-    }
   }
 
   // Reduce update frequency to save battery
   Timer.periodic(const Duration(minutes: 15), (timer) async {
     if (service is AndroidServiceInstance) {
       try {
-        service.setForegroundNotificationInfo(
+        await service.setForegroundNotificationInfo(
           title: 'VDO.Ninja is active',
           content: 'Tap to return to the app',
         );
@@ -433,10 +480,9 @@ class _MyAppState extends State<MyApp> {
       // Request battery optimization exemption for better performance
       await requestBatteryOptimizationExemption();
       
-      bool serviceStarted = await startForegroundService();
-      if (!serviceStarted) {
-        print('Failed to start foreground service');
-      }
+      // Don't start the foreground service automatically
+      // Only start it when the user starts streaming
+      // This avoids the ForegroundServiceDidNotStartInTimeException
     }
     
     _prefs = await SharedPreferences.getInstance();

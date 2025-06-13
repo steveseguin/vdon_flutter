@@ -10,7 +10,8 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:math'; // Import math for Point
 import 'dart:async';
-import '../../main.dart'; // Import for ConnectionMode enum
+import '../../main.dart'; // Import for ConnectionMode enum and startForegroundService
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
@@ -127,6 +128,19 @@ class _CallSampleState extends State<CallSample> {
     
     // Clear iOS controller reference
     _iosViewController = null;
+    
+    // Temporarily disabled - TODO: Fix foreground service
+    /*
+    if (Platform.isAndroid) {
+      try {
+        print("Stopping foreground service on dispose...");
+        final service = FlutterBackgroundService();
+        service.invoke("stopService");
+      } catch (e) {
+        print('Error stopping foreground service on dispose: $e');
+      }
+    }
+    */
 
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeRight,
@@ -520,6 +534,25 @@ class _CallSampleState extends State<CallSample> {
       }
     });
 
+    // Temporarily disable foreground service to prevent crashes
+    // TODO: Implement a more robust background service solution
+    /*
+    if (Platform.isAndroid) {
+      try {
+        print("Starting foreground service for WebRTC streaming...");
+        bool serviceStarted = await startForegroundService();
+        if (!serviceStarted) {
+          print('Warning: Failed to start foreground service');
+        } else {
+          print('Foreground service started successfully');
+        }
+      } catch (e) {
+        print('Error starting foreground service: $e');
+        // Continue anyway - the app might work without it
+      }
+    }
+    */
+    
     // Connect
     await _signaling?.connect();
     print("Signaling connect called.");
@@ -531,6 +564,19 @@ class _CallSampleState extends State<CallSample> {
       _signaling?.close(); // Add null check
       _inCalling = false;
       _currentZoom = 1.0;
+      
+      // Temporarily disabled - TODO: Fix foreground service
+      /*
+      if (Platform.isAndroid) {
+        try {
+          print("Stopping foreground service...");
+          final service = FlutterBackgroundService();
+          service.invoke("stopService");
+        } catch (e) {
+          print('Error stopping foreground service: $e');
+        }
+      }
+      */
 
       if (Navigator.canPop(context)) {
         Navigator.of(context).pop();

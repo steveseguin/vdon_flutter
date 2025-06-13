@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(flutter pub:*)",
+      "WebFetch(domain:pub.dev)",
+      "Bash(rg:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter:*)",
+      "Bash(cat:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": false
+}
