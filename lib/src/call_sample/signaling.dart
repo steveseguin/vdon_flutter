@@ -1195,32 +1195,9 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
       'iceServers': [],
     }, {});
     
-    // Get only the new audio track
+    // Get only the new audio track with advanced constraints
     final newAudioStream = await navigator.mediaDevices.getUserMedia({
-      'audio': audioDeviceId == "default"
-          ? {
-              'mandatory': {
-                'googNoiseSuppression': true,
-                'echoCancellation': false,
-                'autoGainControl': true,
-                'noiseSuppression': true,
-                'googAutoGainControl': true,
-                'googEchoCancellation': false,
-              }
-            }
-          : {
-              'optional': [
-                {'sourceId': audioDeviceId}
-              ],
-              'mandatory': {
-                'googNoiseSuppression': true,
-                'echoCancellation': false,
-                'autoGainControl': true,
-                'noiseSuppression': true,
-                'googAutoGainControl': true, 
-                'googEchoCancellation': false,
-              }
-            },
+      'audio': await _buildAdvancedAudioConstraints(audioDeviceId),
       'video': false, // Important: only request audio
     });
 
@@ -2417,6 +2394,8 @@ Future<MediaStream> createStream() async {
         
         // Configure iOS audio session for screen sharing
         await initializeIOSAudioSession(forScreenShare: true);
+        
+        // Note: iOS system audio capture is not supported due to platform restrictions
       } else {
         // Android/Web implementation
         stream = await navigator.mediaDevices.getDisplayMedia({
@@ -2429,19 +2408,31 @@ Future<MediaStream> createStream() async {
               'maxFrameRate': frameRate,
             }
           },
+          'audio': true, // Try to capture system audio on Android
         });
+        
+        // Try to add system audio capture for Android
+        if (Platform.isAndroid) {
+          try {
+            MediaStream? systemAudio = await _trySystemAudioCapture();
+            if (systemAudio != null) {
+              // Mix system audio with screen capture
+              var audioTracks = systemAudio.getAudioTracks();
+              if (audioTracks.isNotEmpty) {
+                await stream.addTrack(audioTracks.first);
+                print("Added system audio track to screen share");
+              }
+            }
+          } catch (e) {
+            print("Failed to add system audio to screen share: $e");
+          }
+        }
       }
     } else if (deviceID == "microphone") {
       print("Requesting audio-only...");
-      Map<String, dynamic> audioConstraints = audioDeviceId == "default"
-          ? {'mandatory': {'echoCancellation': false}}
-          : {
-              'mandatory': {'echoCancellation': false},
-              'optional': [{'sourceId': audioDeviceId}]
-            };
       
       stream = await navigator.mediaDevices.getUserMedia({
-        'audio': audioConstraints,
+        'audio': await _buildAdvancedAudioConstraints(audioDeviceId),
         'video': false
       });
     } else {
@@ -2473,17 +2464,9 @@ Future<MediaStream> createStream() async {
         videoConstraints['deviceId'] = deviceID;
       }
       
-      // Set up audio constraints
-      Map<String, dynamic> audioConstraints = audioDeviceId == "default"
-          ? {'mandatory': {'echoCancellation': false}}
-          : {
-              'mandatory': {'echoCancellation': false},
-              'optional': [{'sourceId': audioDeviceId}]
-            };
-      
-      // Get combined stream
+      // Get combined stream with advanced audio constraints
       stream = await navigator.mediaDevices.getUserMedia({
-        'audio': audioConstraints,
+        'audio': await _buildAdvancedAudioConstraints(audioDeviceId),
         'video': videoConstraints
       });
     }
@@ -2618,6 +2601,127 @@ Future<bool> _isHighPerformanceDevice() async {
   }
   // Default to false for safety (less demanding settings)
   return false;
+}
+
+// Build advanced audio constraints optimized for USB devices
+Future<Map<String, dynamic>> _buildAdvancedAudioConstraints(String audioDeviceId) async {
+  Map<String, dynamic> baseConstraints = {
+    'echoCancellation': false,
+    'autoGainControl': false, // Disable for professional USB devices
+    'noiseSuppression': false, // Let professional devices handle this
+    'googEchoCancellation': false,
+    'googAutoGainControl': false,
+    'googNoiseSuppression': false,
+  };
+
+  if (audioDeviceId == "default") {
+    return {
+      'mandatory': {
+        ...baseConstraints,
+        // Enable processing for built-in mics
+        'autoGainControl': true,
+        'noiseSuppression': true,
+        'googAutoGainControl': true,
+        'googNoiseSuppression': true,
+      }
+    };
+  } else {
+    // For specific devices (likely USB), try to get high quality
+    Map<String, dynamic> constraints = {
+      'optional': [
+        {'sourceId': audioDeviceId},
+        // Try for higher sample rates first
+        {'sampleRate': 48000},
+        {'sampleRate': 44100},
+        {'channelCount': 2}, // Stereo if available
+        {'latency': 0.01}, // Low latency
+        {'sampleSize': 16},
+      ],
+      'mandatory': baseConstraints,
+    };
+
+    // Try to detect if this might be a USB audio device
+    try {
+      var devices = await navigator.mediaDevices.enumerateDevices();
+      var device = devices.firstWhere(
+        (d) => d.deviceId == audioDeviceId && d.kind == 'audioinput', 
+        orElse: () => MediaDeviceInfo(deviceId: '', label: '', kind: '')
+      );
+      
+      if (device.label.toLowerCase().contains('usb') || 
+          device.label.toLowerCase().contains('audio interface') ||
+          device.label.toLowerCase().contains('scarlett') ||
+          device.label.toLowerCase().contains('focusrite') ||
+          device.label.toLowerCase().contains('zoom') ||
+          device.label.toLowerCase().contains('presonus') ||
+          device.label.toLowerCase().contains('behringer') ||
+          device.label.toLowerCase().contains('motu') ||
+          device.label.toLowerCase().contains('rme') ||
+          device.label.toLowerCase().contains('steinberg')) {
+        print("Detected professional USB audio device: ${device.label}");
+        
+        // For professional devices, prioritize quality over processing
+        constraints['optional']!.insertAll(0, [
+          {'sampleRate': 96000}, // Try highest quality first
+          {'sampleRate': 88200},
+          {'latency': 0.005}, // Even lower latency
+          {'channelCount': 8}, // Multi-channel support
+          {'channelCount': 4},
+        ]);
+      }
+    } catch (e) {
+      print("Error detecting USB audio device: $e");
+    }
+
+    return constraints;
+  }
+}
+
+// System audio capture for screen sharing (Android)
+Future<MediaStream?> _trySystemAudioCapture() async {
+  if (!Platform.isAndroid) {
+    print("System audio capture only supported on Android");
+    return null;
+  }
+
+  try {
+    // Try to get system audio via display media
+    var stream = await navigator.mediaDevices.getDisplayMedia({
+      'audio': {
+        'mandatory': {
+          'chromeMediaSource': 'system',
+          'echoCancellation': false,
+          'noiseSuppression': false,
+          'autoGainControl': false,
+        }
+      },
+      'video': false,
+    });
+    
+    print("Successfully captured system audio");
+    return stream;
+  } catch (e) {
+    print("System audio capture failed: $e");
+    
+    // Fallback: try MediaProjection API constraints
+    try {
+      var stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'mandatory': {
+            'chromeMediaSource': 'desktop',
+            'chromeMediaSourceId': 'system_audio',
+            'echoCancellation': false,
+          }
+        }
+      });
+      
+      print("System audio captured via MediaProjection");
+      return stream;
+    } catch (e2) {
+      print("MediaProjection system audio failed: $e2");
+      return null;
+    }
+  }
 }
 
   Future<void> _createAnswer(

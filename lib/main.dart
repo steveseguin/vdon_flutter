@@ -239,6 +239,7 @@ bool advanced = false;
 bool landscape = false;
 bool useCustomBitrate = false;
 int customBitrate = 0;
+bool enableSystemAudio = false; // System audio capture for screen sharing
 String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
 String customSalt = 'vdo.ninja';
@@ -512,6 +513,7 @@ class _MyAppState extends State<MyApp> {
     try {
       useCustomBitrate = _prefs.getBool('useCustomBitrate') ?? false;
       customBitrate = _prefs.getInt('customBitrate') ?? 0;
+      enableSystemAudio = _prefs.getBool('enableSystemAudio') ?? false;
     } catch (e) {}
     
     try {
@@ -602,6 +604,7 @@ class _MyAppState extends State<MyApp> {
               _prefs.setString('customSalt', customSalt);
               _prefs.setBool('useCustomBitrate', useCustomBitrate);
               _prefs.setInt('customBitrate', customBitrate);
+              _prefs.setBool('enableSystemAudio', enableSystemAudio);
               _prefs.setString('connectionMode', connectionMode.toString());
               _prefs.setString('audioDeviceId', _selectedMicrophoneId);
             });
@@ -676,7 +679,32 @@ class _MyAppState extends State<MyApp> {
     
     for (var item in devices) {
       if (item.kind == "audioinput"){
-        _microphones.insert(0, MediaDeviceInfo(deviceId: item.deviceId, label: item.label));
+        // Check if this might be a USB audio device
+        String label = item.label;
+        bool isUSBDevice = label.toLowerCase().contains('usb') ||
+            label.toLowerCase().contains('audio interface') ||
+            label.toLowerCase().contains('scarlett') ||
+            label.toLowerCase().contains('focusrite') ||
+            label.toLowerCase().contains('zoom') ||
+            label.toLowerCase().contains('presonus') ||
+            label.toLowerCase().contains('behringer') ||
+            label.toLowerCase().contains('motu') ||
+            label.toLowerCase().contains('rme') ||
+            label.toLowerCase().contains('steinberg');
+        
+        // Add USB device indicator to label
+        if (isUSBDevice) {
+          label = "🎤 $label (Professional USB)";
+        }
+        
+        MediaDeviceInfo deviceInfo = MediaDeviceInfo(deviceId: item.deviceId, label: label);
+        
+        // Insert USB devices at the beginning (after default) for easy access
+        if (isUSBDevice) {
+          _microphones.insert(1, deviceInfo); // After "Default Microphone"
+        } else {
+          _microphones.add(deviceInfo);
+        }
         continue;        
       } 
       if (item.kind != "videoinput") {
