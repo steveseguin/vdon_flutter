@@ -12,6 +12,89 @@
 .svn/
 ./android/app/.cxx/
 ./ios/build/
+
+# Exclude obsninja source code folder
+obsninja/
+
+# Environment files
+.env
+.env.*
+*.env
+!.env.example
+
+# Test & Coverage
+coverage/
+*.lcov
+.test_coverage.dart
+test/.test_coverage.dart
+
+# Documentation
+doc/api/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Platform builds
+linux/build/
+windows/build/
+macos/build/
+web/build/
+
+# Working documentation (optional - uncomment if you want to exclude)
+# SOCIAL_STREAM_*.md
+# WEBRTC_*.md
+
+# Certificates and keys (NEVER commit these)
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+
+# Large media files (optional)
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Flutter specific
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+linked_*.png
+unlinked.png
+flutter_*.txt
 # IntelliJ related
 *.iml
 *.ipr
@@ -20,6 +103,16 @@
 
 # Visual Studio Code related
 .vscode/
+
+# Other IDE/Editor files
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.code-workspace
 
 # Flutter/Dart/Pub related
 **/doc/api/

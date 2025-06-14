@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math';
+import 'dart:convert';
 import 'src/call_sample/call_sample.dart';
 import 'src/route_item.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -21,6 +22,7 @@ import 'dart:ui' as ui;
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'src/models/social_stream_config.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =  FlutterLocalNotificationsPlugin();
 	
@@ -244,9 +246,14 @@ String WSSADDRESS = 'wss://wss.vdo.ninja:443';
 String TURNSERVER = 'un;pw;turn:turn.x.co:3478';
 String customSalt = 'vdo.ninja';
 
-// Connection mode selection
-enum ConnectionMode { standard, tiktok }
-ConnectionMode connectionMode = ConnectionMode.standard; // Default to standard
+// Social Stream configuration
+SocialStreamConfig socialStreamConfig = SocialStreamConfig(
+  sessionId: '',
+  mode: ConnectionMode.websocket, // Default to websocket since WebRTC not implemented
+  password: 'false',
+  enabled: false,
+);
+
 
 String _selectedMicrophoneId = 'default';
 List<MediaDeviceInfo> _microphones = [];
@@ -498,6 +505,16 @@ class _MyAppState extends State<MyApp> {
     customSalt = _prefs.getString('customSalt') ?? _getDefaultSaltFromWSSAddress(WSSADDRESS);
     // _selectedMicrophoneId = _prefs.getString('audioDeviceId') ?? _selectedMicrophoneId;
     
+    // Load Social Stream configuration
+    final socialStreamData = _prefs.getString('socialStreamConfig');
+    if (socialStreamData != null) {
+      try {
+        socialStreamConfig = SocialStreamConfig.fromMap(jsonDecode(socialStreamData));
+      } catch (e) {
+        print('Error loading Social Stream config: $e');
+      }
+    }
+    
     try {
       quality = _prefs.getBool('resolution') ?? false;
     } catch (e) {}
@@ -511,19 +528,18 @@ class _MyAppState extends State<MyApp> {
     } catch (e) {}
     
     try {
-      useCustomBitrate = _prefs.getBool('useCustomBitrate') ?? false;
-      customBitrate = _prefs.getInt('customBitrate') ?? 0;
+      // Only load custom bitrate settings on Android
+      if (Platform.isAndroid) {
+        useCustomBitrate = _prefs.getBool('useCustomBitrate') ?? false;
+        customBitrate = _prefs.getInt('customBitrate') ?? 0;
+      } else {
+        // Force disable custom bitrate on iOS
+        useCustomBitrate = false;
+        customBitrate = 0;
+      }
       enableSystemAudio = _prefs.getBool('enableSystemAudio') ?? false;
     } catch (e) {}
     
-    try {
-      String? modeString = _prefs.getString('connectionMode');
-      if (modeString != null) {
-        connectionMode = modeString == 'ConnectionMode.tiktok' 
-            ? ConnectionMode.tiktok 
-            : ConnectionMode.standard;
-      }
-    } catch (e) {}
     
     if (streamID == "") {
       var chars = 'AaBbCcDdEeFfGgHhJjKkLMmNnoPpQqRrSsTtUuVvWwXxYyZz23456789';
@@ -569,9 +585,11 @@ class _MyAppState extends State<MyApp> {
           initialCustomSalt: customSalt,
           initialUseCustomBitrate: useCustomBitrate,
           initialCustomBitrate: customBitrate,
-          initialConnectionMode: connectionMode,
+          initialEnableSystemAudio: enableSystemAudio,
+          initialSocialStreamConfig: socialStreamConfig,
           microphones: _microphones,
           selectedMicrophoneId: _selectedMicrophoneId,
+          currentDeviceID: _deviceID,
           onSettingsChanged: (settings) {
             setState(() {
               streamID = settings['streamID'];
@@ -585,8 +603,9 @@ class _MyAppState extends State<MyApp> {
               customSalt = settings['customSalt'];
               useCustomBitrate = settings['useCustomBitrate'];
               customBitrate = settings['customBitrate'];
-              connectionMode = settings['connectionMode'];
+              enableSystemAudio = settings['enableSystemAudio'];
               _selectedMicrophoneId = settings['selectedMicrophoneId'];
+              socialStreamConfig = settings['socialStreamConfig'] ?? socialStreamConfig;
               
               // Save to preferences
               _prefs.setString('streamID', streamID);
@@ -605,8 +624,10 @@ class _MyAppState extends State<MyApp> {
               _prefs.setBool('useCustomBitrate', useCustomBitrate);
               _prefs.setInt('customBitrate', customBitrate);
               _prefs.setBool('enableSystemAudio', enableSystemAudio);
-              _prefs.setString('connectionMode', connectionMode.toString());
               _prefs.setString('audioDeviceId', _selectedMicrophoneId);
+              
+              // Save Social Stream configuration
+              _prefs.setString('socialStreamConfig', jsonEncode(socialStreamConfig.toMap()));
             });
           },
         );
@@ -632,7 +653,8 @@ class _MyAppState extends State<MyApp> {
               mirrored: true,
               customBitrate: useCustomBitrate ? customBitrate : 0,
               customSalt: customSalt,
-              connectionMode: connectionMode
+              enableSystemAudio: enableSystemAudio,
+              socialStreamConfig: socialStreamConfig
             )));
       }
     });
@@ -870,9 +892,11 @@ class PublishingSettingsDialog extends StatefulWidget {
   final String initialCustomSalt;
   final bool initialUseCustomBitrate;
   final int initialCustomBitrate;
-  final ConnectionMode initialConnectionMode;
+  final bool initialEnableSystemAudio;
+  final SocialStreamConfig initialSocialStreamConfig;
   final List<MediaDeviceInfo> microphones;
   final String selectedMicrophoneId;
+  final String currentDeviceID;
   final Function(Map<String, dynamic>) onSettingsChanged;
 
   const PublishingSettingsDialog({
@@ -888,9 +912,11 @@ class PublishingSettingsDialog extends StatefulWidget {
     required this.initialCustomSalt,
     required this.initialUseCustomBitrate,
     required this.initialCustomBitrate,
-    required this.initialConnectionMode,
+    required this.initialEnableSystemAudio,
+    required this.initialSocialStreamConfig,
     required this.microphones,
     required this.selectedMicrophoneId,
+    required this.currentDeviceID,
     required this.onSettingsChanged,
   }) : super(key: key);
 
@@ -906,6 +932,8 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
   late TextEditingController _turnServerController;
   late TextEditingController _customSaltController;
   late TextEditingController _customBitrateController;
+  late TextEditingController _socialStreamSessionController;
+  late TextEditingController _socialStreamPasswordController;
   
   late FocusNode _wssAddressFocusNode;
   
@@ -920,8 +948,9 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
   late String customSalt;
   late bool useCustomBitrate;
   late int customBitrate;
-  late ConnectionMode connectionMode;
+  late bool enableSystemAudio;
   late String _selectedMicrophoneId;
+  late SocialStreamConfig socialStreamConfig;
   
   @override
   void initState() {
@@ -935,6 +964,8 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
     _turnServerController = TextEditingController(text: widget.initialTurnServer);
     _customSaltController = TextEditingController(text: widget.initialCustomSalt);
     _customBitrateController = TextEditingController(text: widget.initialCustomBitrate > 0 ? widget.initialCustomBitrate.toString() : '');
+    _socialStreamSessionController = TextEditingController(text: widget.initialSocialStreamConfig.sessionId);
+    _socialStreamPasswordController = TextEditingController(text: widget.initialSocialStreamConfig.password ?? 'false');
     
     // Initialize focus node
     _wssAddressFocusNode = FocusNode();
@@ -963,10 +994,17 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
     WSSADDRESS = widget.initialWSSAddress;
     TURNSERVER = widget.initialTurnServer;
     customSalt = widget.initialCustomSalt;
-    useCustomBitrate = widget.initialUseCustomBitrate;
-    customBitrate = widget.initialCustomBitrate;
-    connectionMode = widget.initialConnectionMode;
+    // Force disable custom bitrate on iOS
+    if (Platform.isAndroid) {
+      useCustomBitrate = widget.initialUseCustomBitrate;
+      customBitrate = widget.initialCustomBitrate;
+    } else {
+      useCustomBitrate = false;
+      customBitrate = 0;
+    }
+    enableSystemAudio = widget.initialEnableSystemAudio;
     _selectedMicrophoneId = widget.selectedMicrophoneId;
+    socialStreamConfig = widget.initialSocialStreamConfig;
   }
   
   @override
@@ -978,6 +1016,8 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
     _turnServerController.dispose();
     _customSaltController.dispose();
     _customBitrateController.dispose();
+    _socialStreamSessionController.dispose();
+    _socialStreamPasswordController.dispose();
     _wssAddressFocusNode.dispose();
     super.dispose();
   }
@@ -995,8 +1035,9 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
       'customSalt': customSalt,
       'useCustomBitrate': useCustomBitrate,
       'customBitrate': customBitrate,
-      'connectionMode': connectionMode,
+      'enableSystemAudio': enableSystemAudio,
       'selectedMicrophoneId': _selectedMicrophoneId,
+      'socialStreamConfig': socialStreamConfig,
     });
   }
   
@@ -1230,108 +1271,6 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
                           ),
                         ),
                         
-                        // Connection Mode Selection
-                        Container(
-                          margin: EdgeInsets.symmetric(vertical: 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Connection Mode',
-                                style: TextStyle(color: Colors.white70, fontSize: 12),
-                              ),
-                              SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          connectionMode = ConnectionMode.standard;
-                                        });
-                                        _updateSettings();
-                                      },
-                                      child: Container(
-                                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                        decoration: BoxDecoration(
-                                          color: connectionMode == ConnectionMode.standard 
-                                              ? ninjaAccentColor 
-                                              : Colors.transparent,
-                                          border: Border.all(
-                                            color: connectionMode == ConnectionMode.standard 
-                                                ? ninjaAccentColor 
-                                                : Colors.white30,
-                                            width: 2,
-                                          ),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          'Standard Mode',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: connectionMode == ConnectionMode.standard 
-                                                ? Colors.black 
-                                                : Colors.white,
-                                            fontWeight: connectionMode == ConnectionMode.standard 
-                                                ? FontWeight.bold 
-                                                : FontWeight.normal,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          connectionMode = ConnectionMode.tiktok;
-                                        });
-                                        _updateSettings();
-                                      },
-                                      child: Container(
-                                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                        decoration: BoxDecoration(
-                                          color: connectionMode == ConnectionMode.tiktok 
-                                              ? ninjaAccentColor 
-                                              : Colors.transparent,
-                                          border: Border.all(
-                                            color: connectionMode == ConnectionMode.tiktok 
-                                                ? ninjaAccentColor 
-                                                : Colors.white30,
-                                            width: 2,
-                                          ),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          'TikTok WS',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: connectionMode == ConnectionMode.tiktok 
-                                                ? Colors.black 
-                                                : Colors.white,
-                                            fontWeight: connectionMode == ConnectionMode.tiktok 
-                                                ? FontWeight.bold 
-                                                : FontWeight.normal,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                connectionMode == ConnectionMode.standard 
-                                    ? 'Default VDO.Ninja connection (recommended)' 
-                                    : 'TikTok-optimized WebSocket connection',
-                                style: TextStyle(color: Colors.white54, fontSize: 11),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                        
                         // Divider
                         Divider(color: Colors.white30, height: 32),
                         
@@ -1497,61 +1436,276 @@ class _PublishingSettingsDialogState extends State<PublishingSettingsDialog> {
                             ),
                           ),
                           
-                          // Custom Bitrate Switch
-                          Container(
-                            margin: EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.white10),
-                              borderRadius: BorderRadius.circular(12),
+                          // Custom Bitrate Switch (Android only - iOS doesn't support setParameters)
+                          if (Platform.isAndroid) ...[
+                            Container(
+                              margin: EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SwitchListTile(
+                                title: const Text('Custom bitrate', style: TextStyle(color: Colors.white)),
+                                subtitle: Text('Override default video bitrate', 
+                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                value: useCustomBitrate,
+                                activeColor: ninjaAccentColor,
+                                onChanged: (bool value) {
+                                  setState(() {
+                                    useCustomBitrate = value;
+                                  });
+                                  _updateSettings();
+                                }
+                              ),
                             ),
-                            child: SwitchListTile(
-                              title: const Text('Custom bitrate', style: TextStyle(color: Colors.white)),
-                              subtitle: Text('Override default video bitrate', 
-                                style: TextStyle(color: Colors.white54, fontSize: 12)),
-                              value: useCustomBitrate,
-                              activeColor: ninjaAccentColor,
-                              onChanged: (bool value) {
-                                setState(() {
-                                  useCustomBitrate = value;
-                                });
-                                _updateSettings();
-                              }
+                            
+                            // Custom Bitrate Input with validation
+                            if (useCustomBitrate)
+                              Container(
+                                margin: EdgeInsets.symmetric(vertical: 12),
+                                child: TextField(
+                                  style: TextStyle(color: Colors.white),
+                                  controller: _customBitrateController,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (String text) {
+                                    setState(() {
+                                      customBitrate = int.tryParse(text) ?? 0;
+                                    });
+                                    _updateSettings();
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: quality ? "10000" : "6000",
+                                    labelText: 'Bitrate (kbps)',
+                                    helperText: 'Default: ${quality ? "10000" : "6000"} kbps. Range: 100-50000',
+                                    helperStyle: TextStyle(color: Colors.white54),
+                                    labelStyle: TextStyle(color: Colors.white70),
+                                    hintStyle: TextStyle(color: Colors.white30),
+                                    enabledBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: Colors.white30),
+                                    ),
+                                    focusedBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(color: ninjaAccentColor),
+                                    ),
+                                    errorText: _validateBitrate(customBitrate),
+                                    errorStyle: TextStyle(color: Colors.red),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                          ],
+                          
+                          // Social Stream Integration
+                          SizedBox(height: 16),
+                          Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.purple.withOpacity(0.5)),
+                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.purple.withOpacity(0.1),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.chat_bubble, color: Colors.purple, size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Social Stream Ninja Integration',
+                                      style: TextStyle(
+                                        color: Colors.purple,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 12),
+                                
+                                // Enable Social Stream Toggle
+                                SwitchListTile(
+                                  title: const Text('Enable Social Stream', style: TextStyle(color: Colors.white)),
+                                  subtitle: Text('Receive chat messages from Social Stream Ninja', 
+                                    style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                  value: socialStreamConfig.enabled,
+                                  activeColor: Colors.purple,
+                                  onChanged: (bool value) {
+                                    setState(() {
+                                      socialStreamConfig = SocialStreamConfig(
+                                        sessionId: socialStreamConfig.sessionId,
+                                        mode: socialStreamConfig.mode,
+                                        password: socialStreamConfig.password,
+                                        enabled: value,
+                                      );
+                                    });
+                                    _updateSettings();
+                                  }
+                                ),
+                                
+                                if (socialStreamConfig.enabled) ...[
+                                  SizedBox(height: 12),
+                                  
+                                  // Session ID Input
+                                  TextField(
+                                    style: TextStyle(color: Colors.white),
+                                    controller: _socialStreamSessionController,
+                                    onChanged: (String text) {
+                                      setState(() {
+                                        socialStreamConfig = SocialStreamConfig(
+                                          sessionId: text,
+                                          mode: socialStreamConfig.mode,
+                                          password: socialStreamConfig.password,
+                                          enabled: socialStreamConfig.enabled,
+                                        );
+                                      });
+                                      _updateSettings();
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: "Enter Social Stream session ID",
+                                      labelText: 'Social Stream Session ID',
+                                      helperText: 'The session ID from Social Stream Ninja',
+                                      helperStyle: TextStyle(color: Colors.white54),
+                                      labelStyle: TextStyle(color: Colors.white70),
+                                      hintStyle: TextStyle(color: Colors.white30),
+                                      enabledBorder: UnderlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.white30),
+                                      ),
+                                      focusedBorder: UnderlineInputBorder(
+                                        borderSide: BorderSide(color: Colors.purple),
+                                      ),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  
+                                  SizedBox(height: 12),
+                                  
+                                  // Connection Mode Selector
+                                  Container(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Connection Mode',
+                                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                                        ),
+                                        SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: RadioListTile<ConnectionMode>(
+                                                title: Text('WebRTC', style: TextStyle(color: Colors.white, fontSize: 14)),
+                                                subtitle: Text('Lower latency', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                                                value: ConnectionMode.webrtc,
+                                                groupValue: socialStreamConfig.mode,
+                                                activeColor: Colors.purple,
+                                                onChanged: (ConnectionMode? value) {
+                                                  if (value != null) {
+                                                    setState(() {
+                                                      socialStreamConfig = SocialStreamConfig(
+                                                        sessionId: socialStreamConfig.sessionId,
+                                                        mode: value,
+                                                        password: value == ConnectionMode.webrtc ? (socialStreamConfig.password ?? 'false') : null,
+                                                        enabled: socialStreamConfig.enabled,
+                                                      );
+                                                    });
+                                                    _updateSettings();
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: RadioListTile<ConnectionMode>(
+                                                title: Text('WebSocket', style: TextStyle(color: Colors.white, fontSize: 14)),
+                                                subtitle: Text('Simpler setup', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                                                value: ConnectionMode.websocket,
+                                                groupValue: socialStreamConfig.mode,
+                                                activeColor: Colors.purple,
+                                                onChanged: (ConnectionMode? value) {
+                                                  if (value != null) {
+                                                    setState(() {
+                                                      socialStreamConfig = SocialStreamConfig(
+                                                        sessionId: socialStreamConfig.sessionId,
+                                                        mode: value,
+                                                        password: null,
+                                                        enabled: socialStreamConfig.enabled,
+                                                      );
+                                                    });
+                                                    _updateSettings();
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  
+                                  // WebRTC Password Input (only for WebRTC mode)
+                                  if (socialStreamConfig.mode == ConnectionMode.webrtc) ...[
+                                    SizedBox(height: 12),
+                                    TextField(
+                                      style: TextStyle(color: Colors.white),
+                                      controller: _socialStreamPasswordController,
+                                      onChanged: (String text) {
+                                        setState(() {
+                                          socialStreamConfig = SocialStreamConfig(
+                                            sessionId: socialStreamConfig.sessionId,
+                                            mode: socialStreamConfig.mode,
+                                            password: text.isEmpty ? 'false' : text,
+                                            enabled: socialStreamConfig.enabled,
+                                          );
+                                        });
+                                        _updateSettings();
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: "false",
+                                        labelText: 'Encryption Password (optional)',
+                                        helperText: 'Leave as "false" to disable encryption, or set a custom password',
+                                        helperMaxLines: 2,
+                                        helperStyle: TextStyle(color: Colors.white54),
+                                        labelStyle: TextStyle(color: Colors.white70),
+                                        hintStyle: TextStyle(color: Colors.white30),
+                                        enabledBorder: UnderlineInputBorder(
+                                          borderSide: BorderSide(color: Colors.white30),
+                                        ),
+                                        focusedBorder: UnderlineInputBorder(
+                                          borderSide: BorderSide(color: Colors.purple),
+                                        ),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ],
+                              ],
                             ),
                           ),
                           
-                          // Custom Bitrate Input with validation
-                          if (useCustomBitrate)
+                          // System Audio Toggle (Android only)
+                          if (Platform.isAndroid && widget.currentDeviceID == "screen") ...[
+                            SizedBox(height: 8),
                             Container(
-                              margin: EdgeInsets.symmetric(vertical: 12),
-                              child: TextField(
-                                style: TextStyle(color: Colors.white),
-                                controller: _customBitrateController,
-                                keyboardType: TextInputType.number,
-                                onChanged: (String text) {
+                              margin: EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SwitchListTile(
+                                title: const Text('Capture System Audio', style: TextStyle(color: Colors.white)),
+                                subtitle: Text('Include device audio with screen share (Android 10+)', 
+                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                value: enableSystemAudio,
+                                activeColor: ninjaAccentColor,
+                                onChanged: (bool value) {
                                   setState(() {
-                                    customBitrate = int.tryParse(text) ?? 0;
+                                    enableSystemAudio = value;
                                   });
                                   _updateSettings();
-                                },
-                                decoration: InputDecoration(
-                                  hintText: quality ? "10000" : "6000",
-                                  labelText: 'Bitrate (kbps)',
-                                  helperText: 'Default: ${quality ? "10000" : "6000"} kbps. Range: 100-50000',
-                                  helperStyle: TextStyle(color: Colors.white54),
-                                  labelStyle: TextStyle(color: Colors.white70),
-                                  hintStyle: TextStyle(color: Colors.white30),
-                                  enabledBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: Colors.white30),
-                                  ),
-                                  focusedBorder: UnderlineInputBorder(
-                                    borderSide: BorderSide(color: ninjaAccentColor),
-                                  ),
-                                  errorText: _validateBitrate(customBitrate),
-                                  errorStyle: TextStyle(color: Colors.red),
-                                ),
-                                textAlign: TextAlign.center,
+                                }
                               ),
                             ),
+                          ],
                         ],
                         SizedBox(height: 20),
                       ],

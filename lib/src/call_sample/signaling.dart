@@ -18,6 +18,9 @@ import 'package:flutter_webrtc/src/native/ios/audio_configuration.dart';
 // Import specific Android audio configuration (optional but good practice)
 // import 'package:flutter_webrtc/src/native/android/audio_configuration.dart';
 import 'package:flutter/services.dart';
+import '../models/obs_state.dart';
+import '../models/social_stream_config.dart';
+import '../services/social_stream_service.dart';
 
 // --- Enums and Helper Functions (Keep as is) ---
 enum SignalingState {
@@ -977,6 +980,9 @@ class Signaling {
   // Bitrate settings
   var customBitrate = 0; // 0 means use default
   var sdpBitrate = 0; // Bitrate from SDP if any
+  var enableSystemAudio = false; // Enable system audio capture for screen sharing
+  SocialStreamConfig? socialStreamConfig; // Social Stream configuration
+  SocialStreamService? _socialStreamService; // Social Stream service instance
   // -------------------------------------------
 
   // Constructor
@@ -990,7 +996,9 @@ class Signaling {
     List turnList, // Expect List<Map<String, String>> or similar
     String password,
     int customBitrate,
-    [String customSalt = 'vdo.ninja'] // Optional parameter with default value
+    [String customSalt = 'vdo.ninja', // Optional parameter with default value
+    bool enableSystemAudio = false, // Optional parameter for system audio
+    SocialStreamConfig? socialStreamConfig] // Optional Social Stream config
   ) {
     // Sanitize IDs
     this.streamID = streamID.replaceAll(RegExp('[^A-Za-z0-9]'), '_');
@@ -1002,10 +1010,17 @@ class Signaling {
     this.WSSADDRESS = wssAddress;
     this.salt = customSalt;
     this.customBitrate = customBitrate;
+    this.enableSystemAudio = enableSystemAudio;
+    this.socialStreamConfig = socialStreamConfig;
+    
     if (customBitrate > 0) {
       print("Custom bitrate set to ${customBitrate}kbps");
     } else {
       print("No custom bitrate specified, will use defaults (720p: 6000kbps, 1080p: 10000kbps)");
+    }
+    
+    if (enableSystemAudio && Platform.isAndroid) {
+      print("System audio capture enabled for screen sharing");
     }
     print("Using custom salt: ${this.salt}");
     this.TURNLIST = turnList.isNotEmpty
@@ -1322,23 +1337,33 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
   bool _isSocketConnected = false;
   // var _port = 443; // Not used directly if WSSADDRESS includes port
   var _sessions = <String, RTCPeerConnection>{}; // Explicit type
+  var _socialStreamDataChannels = <String, RTCDataChannel>{}; // Track Social Stream data channels per peer
   var _remoteSDPs = <String, String>{}; // Store remote SDPs by UUID
   var _sessionID = <String, String>{}; // Explicit type
   var _lowBitrateCount = <String, int>{}; // Track low bitrate occurrences per peer
   var _peerBitrates = <String, int>{}; // Store per-peer bitrate preferences
+  
+  // Data channels for each peer
+  var _dataChannels = <String, RTCDataChannel>{};
+  // OBS state for each peer
+  var _peerOBSStates = <String, OBSState>{};
+  // Track if peer has OBS control enabled
+  var _peerHasOBSControl = <String, bool>{};
+  // Remote control flag
+  bool remote = false;
 
   List<MediaStream> _remoteStreams =
       <MediaStream>[]; // Keep if needed for remote streams
 
   // Callbacks
-  late Function(SignalingState state) onSignalingStateChange;
-  late CallStateCallback onCallStateChange;
-  late StreamStateCallback onLocalStream;
-  late StreamStateCallback onAddRemoteStream;
-  late StreamStateCallback onRemoveRemoteStream;
-  late OtherEventCallback onPeersUpdate;
-  late DataChannelMessageCallback onDataChannelMessage;
-  late DataChannelCallback onDataChannel;
+  Function(SignalingState state)? onSignalingStateChange;
+  CallStateCallback? onCallStateChange;
+  StreamStateCallback? onLocalStream;
+  StreamStateCallback? onAddRemoteStream;
+  StreamStateCallback? onRemoveRemoteStream;
+  OtherEventCallback? onPeersUpdate;
+  DataChannelMessageCallback? onDataChannelMessage;
+  DataChannelCallback? onDataChannel;
 
   // WebRTC Config (Keep as is)
   String get sdpSemantics => 'unified-plan';
@@ -1372,6 +1397,56 @@ Future<void> changeAudioSource(String newAudioDeviceId) async {
   MediaStream? getLocalStream() {
     // Return potentially null stream
     return _localStream;
+  }
+  
+  // Social Stream integration methods
+  Future<void> _initializeSocialStream() async {
+    if (socialStreamConfig == null || !socialStreamConfig!.enabled) return;
+    
+    print("Initializing Social Stream integration");
+    
+    if (socialStreamConfig!.mode == ConnectionMode.webrtc) {
+      // For WebRTC mode, we'll need to add data channel creation to peer connections
+      print("Social Stream WebRTC mode will be initialized with peer connections");
+      // The actual data channel will be created in _createPeerConnectionAndOffer
+    } else {
+      // For WebSocket mode, create a separate connection
+      print("Social Stream WebSocket mode - creating separate connection");
+      // This would be handled by the SocialStreamService in the UI layer
+    }
+  }
+  
+  void _setupSocialStreamDataChannel(RTCDataChannel channel, String remoteUuid) {
+    channel.onDataChannelState = (RTCDataChannelState state) {
+      print("Social Stream data channel state for $remoteUuid: $state");
+      if (state == RTCDataChannelState.RTCDataChannelOpen) {
+        // Send initial connection message for Social Stream
+        final connectMessage = {
+          'action': 'connect',
+          'session': socialStreamConfig!.sessionId,
+          'type': 'publisher',
+        };
+        channel.send(RTCDataChannelMessage(jsonEncode(connectMessage)));
+      }
+    };
+    
+    channel.onMessage = (RTCDataChannelMessage message) {
+      if (message.isBinary) {
+        print("Received binary message from Social Stream on $remoteUuid");
+      } else {
+        print("Received Social Stream message from $remoteUuid: ${message.text}");
+        // Handle Social Stream messages (chat messages, etc.)
+        try {
+          final data = jsonDecode(message.text);
+          if (data['type'] == 'chat' || data['action'] == 'chat') {
+            // Forward chat messages to the UI
+            onDataChannelMessage?.call(channel, message);
+          }
+        } catch (e) {
+          print("Error parsing Social Stream message: $e");
+        }
+      }
+    };
   }
 
   void switchCamera() {
@@ -1785,7 +1860,8 @@ void _setPeerConnectionHandlers(RTCPeerConnection pc, String remoteUuid, String 
   // Data channel handler
   pc.onDataChannel = (channel) {
     print("Data channel received from $remoteUuid: ${channel.label}");
-    _addDataChannel(channel);
+    _dataChannels[remoteUuid] = channel;
+    _setupDataChannel(channel, remoteUuid);
     onDataChannel?.call(channel);
   };
 }
@@ -1861,6 +1937,20 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
         print("ERROR: Failed to add tracks: $e");
         // Continue anyway to create the offer - some implementations allow empty offers
       }
+    }
+    
+    // Create data channel for sending messages
+    print("DEBUG: Creating data channel for $remoteUuid");
+    try {
+      RTCDataChannelInit dataChannelDict = RTCDataChannelInit()
+        ..ordered = true;
+      RTCDataChannel channel = await pc.createDataChannel('sendChannel', dataChannelDict);
+      _dataChannels[remoteUuid] = channel;
+      _setupDataChannel(channel, remoteUuid);
+      print("DEBUG: Data channel created successfully");
+    } catch (e) {
+      print("ERROR: Failed to create data channel: $e");
+      // Continue without data channel - not critical for basic operation
     }
     
     // Create offer
@@ -2011,7 +2101,7 @@ Future<void> _createPeerConnectionAndOffer(String remoteUuid) async {
     // If this was the last peer, potentially update call state
     if (_sessions.isEmpty) {
       print("All peers disconnected.");
-      onCallStateChange(CallState.CallStateBye);
+      onCallStateChange?.call(CallState.CallStateBye);
     }
   }
 
@@ -2192,11 +2282,16 @@ Future<void> connect() async {
       } catch (e) {
         print("Error creating stream: $e");
         active = false;
-        onSignalingStateChange(SignalingState.ConnectionError);
+        onSignalingStateChange?.call(SignalingState.ConnectionError);
         return;
       }
     } else {
       print("Using existing local stream: ${_localStream!.id}");
+    }
+    
+    // Initialize Social Stream if configured
+    if (socialStreamConfig != null && socialStreamConfig!.enabled) {
+      await _initializeSocialStream();
     }
     
     // Start connection attempts
@@ -2233,7 +2328,7 @@ Future<void> attemptConnection() async {
         _isSocketConnected = true;
         reconnectionAttempt = 0;
         _connectionTimer?.cancel(); // Cancel timeout on successful connection
-        onSignalingStateChange(SignalingState.ConnectionOpen);
+        onSignalingStateChange?.call(SignalingState.ConnectionOpen);
 
         // Send initial seed/join messages
         try {
@@ -2274,7 +2369,7 @@ Future<void> attemptConnection() async {
           print("Ignoring onClose event as signaling is inactive.");
           return;
         }
-        onSignalingStateChange(SignalingState.ConnectionClosed);
+        onSignalingStateChange?.call(SignalingState.ConnectionClosed);
 
         if (reconnectionAttempt < maxReconnectionAttempts) {
           int delayMs = (initialReconnectDelayMs * pow(2, reconnectionAttempt)).toInt();
@@ -2293,7 +2388,7 @@ Future<void> attemptConnection() async {
         } else {
           print('Max reconnection attempts reached ($maxReconnectionAttempts). Giving up.');
           active = false;
-          onSignalingStateChange(SignalingState.ConnectionError);
+          onSignalingStateChange?.call(SignalingState.ConnectionError);
           _cleanSessions();
         }
       };
@@ -2335,7 +2430,7 @@ void _safeSend(String data) {
   //             print("Initial connection timeout (${timeoutMs}ms). Closing connection attempt.");
   //             active = false;
   //             _socket?.close(1001, "Connection Timeout");
-  //             onSignalingStateChange(SignalingState.ConnectionError);
+  //             onSignalingStateChange?.call(SignalingState.ConnectionError);
   //             _cleanSessions();
   //        }
   //    });
@@ -2398,33 +2493,57 @@ Future<MediaStream> createStream() async {
         // Note: iOS system audio capture is not supported due to platform restrictions
       } else {
         // Android/Web implementation
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-            'mandatory': {
-              'minWidth': width,
-              'maxWidth': width,
-              'minHeight': height,
-              'maxHeight': height,
-              'maxFrameRate': frameRate,
-            }
-          },
-          'audio': true, // Try to capture system audio on Android
-        });
+        // First try to get screen capture with audio if enabled
+        bool audioRequested = enableSystemAudio && Platform.isAndroid;
         
-        // Try to add system audio capture for Android
-        if (Platform.isAndroid) {
-          try {
-            MediaStream? systemAudio = await _trySystemAudioCapture();
-            if (systemAudio != null) {
-              // Mix system audio with screen capture
-              var audioTracks = systemAudio.getAudioTracks();
-              if (audioTracks.isNotEmpty) {
-                await stream.addTrack(audioTracks.first);
-                print("Added system audio track to screen share");
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            'video': {
+              'mandatory': {
+                'minWidth': width,
+                'maxWidth': width,
+                'minHeight': height,
+                'maxHeight': height,
+                'maxFrameRate': frameRate,
               }
+            },
+            'audio': audioRequested ? {
+              'echoCancellation': false,
+              'noiseSuppression': false,
+              'autoGainControl': false,
+            } : false,
+          });
+          
+          // Check if we got audio tracks
+          if (audioRequested) {
+            var audioTracks = stream.getAudioTracks();
+            if (audioTracks.isNotEmpty) {
+              print("Screen share includes system audio track: ${audioTracks.first.label}");
+            } else {
+              print("No audio track in screen share, attempting separate capture");
+              // Try alternative method if getDisplayMedia didn't include audio
+              await _addSystemAudioToStream(stream);
             }
-          } catch (e) {
-            print("Failed to add system audio to screen share: $e");
+          }
+        } catch (e) {
+          print("getDisplayMedia with audio failed: $e");
+          // Fallback to video-only screen capture
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            'video': {
+              'mandatory': {
+                'minWidth': width,
+                'maxWidth': width,
+                'minHeight': height,
+                'maxHeight': height,
+                'maxFrameRate': frameRate,
+              }
+            },
+            'audio': false,
+          });
+          
+          if (audioRequested) {
+            print("Trying to add system audio separately");
+            await _addSystemAudioToStream(stream);
           }
         }
       }
@@ -2677,6 +2796,30 @@ Future<Map<String, dynamic>> _buildAdvancedAudioConstraints(String audioDeviceId
   }
 }
 
+// Helper to add system audio to an existing stream
+Future<void> _addSystemAudioToStream(MediaStream videoStream) async {
+  if (!Platform.isAndroid) {
+    print("System audio capture only supported on Android");
+    return;
+  }
+  
+  try {
+    MediaStream? audioStream = await _trySystemAudioCapture();
+    if (audioStream != null) {
+      var audioTracks = audioStream.getAudioTracks();
+      if (audioTracks.isNotEmpty) {
+        await videoStream.addTrack(audioTracks.first);
+        print("Successfully added system audio track to screen share");
+        
+        // Dispose of the audio-only stream (we've taken its track)
+        await audioStream.dispose();
+      }
+    }
+  } catch (e) {
+    print("Failed to add system audio to stream: $e");
+  }
+}
+
 // System audio capture for screen sharing (Android)
 Future<MediaStream?> _trySystemAudioCapture() async {
   if (!Platform.isAndroid) {
@@ -2684,44 +2827,33 @@ Future<MediaStream?> _trySystemAudioCapture() async {
     return null;
   }
 
+  // Note: System audio capture in Flutter WebRTC requires Android 10+ (API 29+)
+  // and the audio must be requested as part of getDisplayMedia, not separately
+  
+  // For Flutter WebRTC, system audio should be captured with the screen share itself
+  // This method is kept as a fallback for potential future use or debugging
+  
+  print("System audio capture should be requested with getDisplayMedia on Android 10+");
+  print("Ensure 'audio: true' is passed to getDisplayMedia for system audio");
+  
+  // Try to get microphone as fallback if system audio isn't available
   try {
-    // Try to get system audio via display media
-    var stream = await navigator.mediaDevices.getDisplayMedia({
+    print("Attempting microphone capture as audio fallback...");
+    var stream = await navigator.mediaDevices.getUserMedia({
       'audio': {
-        'mandatory': {
-          'chromeMediaSource': 'system',
-          'echoCancellation': false,
-          'noiseSuppression': false,
-          'autoGainControl': false,
-        }
-      },
-      'video': false,
+        'echoCancellation': false,
+        'noiseSuppression': false,
+        'autoGainControl': false,
+      }
     });
     
-    print("Successfully captured system audio");
+    print("Using microphone audio as fallback");
     return stream;
   } catch (e) {
-    print("System audio capture failed: $e");
-    
-    // Fallback: try MediaProjection API constraints
-    try {
-      var stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'mandatory': {
-            'chromeMediaSource': 'desktop',
-            'chromeMediaSourceId': 'system_audio',
-            'echoCancellation': false,
-          }
-        }
-      });
-      
-      print("System audio captured via MediaProjection");
-      return stream;
-    } catch (e2) {
-      print("MediaProjection system audio failed: $e2");
-      return null;
-    }
+    print("Microphone fallback failed: $e");
   }
+  
+  return null;
 }
 
   Future<void> _createAnswer(
@@ -2733,6 +2865,8 @@ Future<MediaStream?> _trySystemAudioCapture() async {
 		  print("Answer created. Processing SDP for bitrate...");
 		  
 		  // Apply bitrate to SDP before setting local description
+		  // Note: iOS/Flutter WebRTC doesn't support setParameters API properly,
+		  // so bitrate control is only available through SDP manipulation on iOS
 		  String sdp = s.sdp!;
 		  
 		  // Check if the offer already specified a bitrate
@@ -2837,6 +2971,196 @@ Future<MediaStream?> _trySystemAudioCapture() async {
 		print("Error setting up data channel handlers: $e");
 	  }
 	}
+	
+	void _setupDataChannel(RTCDataChannel channel, String remoteUuid) {
+	  print("Setting up data channel for $remoteUuid");
+	  
+	  channel.onDataChannelState = (state) {
+	    print("Data channel state for $remoteUuid: $state");
+	    
+	    if (state == RTCDataChannelState.RTCDataChannelOpen) {
+	      print("Data channel opened for $remoteUuid, sending initial info");
+	      
+	      // Send initial info message when data channel opens
+	      Map<String, dynamic> msg = {
+	        'info': {
+	          'label': streamID,
+	          'muted': false,
+	          'video_muted_init': false,
+	          'room_init': roomID.isNotEmpty,
+	          'version': '1.0.0', // Flutter app version
+	          'platform': Platform.operatingSystem,
+	          'flutter': true, // Indicate this is a Flutter app
+	          'obs_control': true, // Enable OBS control - this tells OBS to share scene details
+	          'remote': true, // Also set in info for compatibility
+	        },
+	        'remote': true, // Set to true at top level to indicate remote control support
+	      };
+	      
+	      print("Sending initial info with remote=true to $remoteUuid");
+	      _sendDataChannelMessage(remoteUuid, jsonEncode(msg));
+	    }
+	  };
+	  
+	  channel.onMessage = (RTCDataChannelMessage message) {
+	    if (message.isBinary) {
+	      print("Received binary message from $remoteUuid");
+	      return;
+	    }
+	    
+	    print("Received message from $remoteUuid: ${message.text}");
+	    
+	    try {
+	      Map<String, dynamic> data = jsonDecode(message.text);
+	      
+	      // Handle all data channel messages (including OBS state updates)
+	      _handleDataChannelMessage(remoteUuid, data);
+	      
+	      // Call the general message callback if set
+	      onDataChannelMessage?.call(channel, message);
+	    } catch (e) {
+	      print("Error parsing data channel message: $e");
+	    }
+	  };
+	}
+	
+	void _sendDataChannelMessage(String remoteUuid, String message) {
+	  final channel = _dataChannels[remoteUuid];
+	  if (channel != null && channel.state == RTCDataChannelState.RTCDataChannelOpen) {
+	    try {
+	      channel.send(RTCDataChannelMessage(message));
+	      print("Sent message to $remoteUuid: $message");
+	    } catch (e) {
+	      print("Error sending data channel message: $e");
+	    }
+	  } else {
+	    print("Cannot send message - data channel not open for $remoteUuid");
+	  }
+	}
+	
+	void _handleDataChannelMessage(String remoteUuid, Map<String, dynamic> data) {
+	  // Check if this is the initial connection info with OBS details
+	  if (data.containsKey('info') && data['info'] is Map) {
+	    var info = data['info'] as Map<String, dynamic>;
+	    // Check if this peer is using OBS
+	    if (info.containsKey('obs') && info['obs'] != false) {
+	      print("Peer $remoteUuid is using OBS: ${info['obs']}");
+	      // Mark this peer as having OBS (we'll check control level later)
+	      // For now, this just indicates the peer has OBS installed
+	      _peerHasOBSControl[remoteUuid] = true;
+	    }
+	  }
+	  
+	  // Always assume remote control is enabled
+	  // Always request OBS state on first data channel message if we haven't already
+	  if (!_peerOBSStates.containsKey(remoteUuid) || _peerOBSStates[remoteUuid]?.details == null) {
+	    // Request OBS state on first contact or if we don't have details yet
+	    print("Contact with $remoteUuid, requesting full OBS state with details");
+	    _requestOBSState(remoteUuid);
+	    
+	    // Also request state after a short delay to ensure we get all data
+	    Future.delayed(Duration(seconds: 1), () {
+	      if (_dataChannels.containsKey(remoteUuid)) {
+	        print("Follow-up OBS state request for $remoteUuid");
+	        _requestOBSState(remoteUuid);
+	      }
+	    });
+	  }
+	  
+	  // Handle OBS state updates (can be incremental)
+	  if (data.containsKey('obsState')) {
+	    print("Received OBS state update from $remoteUuid: ${data['obsState']}");
+	    
+	    // Get existing state or create new one
+	    var existingState = _peerOBSStates[remoteUuid];
+	    if (existingState == null) {
+	      existingState = OBSState();
+	      _peerOBSStates[remoteUuid] = existingState;
+	    }
+	    
+	    // Update only the fields that were sent (incremental update)
+	    var obsUpdate = data['obsState'] as Map<String, dynamic>;
+	    if (obsUpdate.containsKey('visibility')) {
+	      existingState.visibility = obsUpdate['visibility'];
+	    }
+	    if (obsUpdate.containsKey('sourceActive')) {
+	      existingState.sourceActive = obsUpdate['sourceActive'];
+	    }
+	    if (obsUpdate.containsKey('recording')) {
+	      existingState.recording = obsUpdate['recording'];
+	    }
+	    if (obsUpdate.containsKey('streaming')) {
+	      existingState.streaming = obsUpdate['streaming'];
+	    }
+	    if (obsUpdate.containsKey('virtualcam')) {
+	      existingState.virtualcam = obsUpdate['virtualcam'];
+	    }
+	    if (obsUpdate.containsKey('details')) {
+	      if (obsUpdate['details'] != null) {
+	        existingState.details = OBSDetails.fromMap(obsUpdate['details']);
+	        // Check control level - need level >= 4 for control access
+	        if (existingState.details?.controlLevel != null) {
+	          int controlLevel = existingState.details!.controlLevel!;
+	          _peerHasOBSControl[remoteUuid] = controlLevel >= 4;
+	          print("Peer $remoteUuid has OBS control level: $controlLevel (control access: ${controlLevel >= 4})");
+	        } else {
+	          // No control level specified, assume no control
+	          _peerHasOBSControl[remoteUuid] = false;
+	          print("Peer $remoteUuid has no OBS control level specified - denying control access");
+	        }
+	      } else {
+	        // Details explicitly set to null - permissions revoked
+	        existingState.details = null;
+	        _peerHasOBSControl[remoteUuid] = false;
+	        print("Peer $remoteUuid OBS permissions revoked - details set to null");
+	      }
+	    } else if (!obsUpdate.containsKey('visibility') && 
+	               !obsUpdate.containsKey('sourceActive') && 
+	               !obsUpdate.containsKey('recording') && 
+	               !obsUpdate.containsKey('streaming') && 
+	               !obsUpdate.containsKey('virtualcam')) {
+	      // If no specific fields are being updated, this might be a permission reset
+	      // Check if the entire state should be reset
+	      if (obsUpdate.isEmpty || (obsUpdate.containsKey('controlLevel') && obsUpdate['controlLevel'] == 0)) {
+	        print("Peer $remoteUuid OBS permissions reset - clearing control access");
+	        existingState.details = null;
+	        _peerHasOBSControl[remoteUuid] = false;
+	      }
+	    }
+	    
+	    // Notify UI through onPeersUpdate
+	    onPeersUpdate?.call({
+	      'event': 'obsStateUpdate',
+	      'uuid': remoteUuid,
+	      'obsState': existingState,
+	    });
+	  }
+	  
+	  // Handle remote control messages (type: "remote")
+	  if (data.containsKey('type') && data['type'] == 'remote') {
+	    print("Received remote control message from $remoteUuid");
+	    // This might contain OBS control commands or state
+	    if (data.containsKey('action')) {
+	      print("Remote action: ${data['action']}");
+	    }
+	  }
+	  
+	  // Handle OBS command responses
+	  if (data.containsKey('rejected')) {
+	    print("OBS command rejected by $remoteUuid: ${data['rejected']}");
+	    if (data['rejected'] == 'obsCommand') {
+	      print("Possible reasons: 1) Viewer doesn't have &remote=true in URL, 2) Control level < 5, 3) Remote password mismatch");
+	    }
+	  }
+	  
+	  // Forward other messages to the app
+	  onDataChannelMessage?.call(_dataChannels[remoteUuid]!, 
+	    RTCDataChannelMessage(jsonEncode(data)));
+	}
+	
+	// Note: sendOBSCommand is defined in the Data Channel and OBS Control Methods section below
+	
+	// Note: getOBSState and hasOBSControl are defined in the Data Channel and OBS Control Methods section below
 
   // --- Cleanup Logic ---
   Future<void> _cleanSessions() async {
@@ -2859,6 +3183,18 @@ Future<MediaStream?> _trySystemAudioCapture() async {
     _remoteSDPs.clear();
     _lowBitrateCount.clear();
     _peerBitrates.clear();
+    
+    // Close all data channels
+    for (var channel in _dataChannels.values) {
+      try {
+        channel.close();
+      } catch (e) {
+        print("Error closing data channel: $e");
+      }
+    }
+    _dataChannels.clear();
+    _peerOBSStates.clear();
+    _peerHasOBSControl.clear();
 
     // Dispose iOS silent audio player first
     if (Platform.isIOS) {
@@ -2980,4 +3316,94 @@ Future<MediaStream?> _trySystemAudioCapture() async {
     };
   }
   // --- End Public Bitrate Control Methods ---
+  
+  // --- Data Channel and OBS Control Methods ---
+  // NOTE: _setupDataChannel is already defined above at line 2913
+  
+  // Request full OBS state from a peer
+  void _requestOBSState(String remoteUuid) {
+    print("Requesting full OBS state from $remoteUuid");
+    final channel = _dataChannels[remoteUuid];
+    if (channel != null && channel.state == RTCDataChannelState.RTCDataChannelOpen) {
+      try {
+        // Send a request for the full OBS state including scenes
+        // Try multiple request formats to ensure compatibility
+        final message = jsonEncode({
+          'getOBSState': true,  // Alternative format
+          'request': 'getOBSState',
+          'getDetails': true,  // Request detailed info including scenes
+          'remote': true,  // Required for authentication
+        });
+        channel.send(RTCDataChannelMessage(message));
+        print("Sent OBS state request with details to $remoteUuid");
+      } catch (e) {
+        print("Error requesting OBS state: $e");
+      }
+    }
+  }
+  
+  void _sendDataChannelMessageToChannel(RTCDataChannel channel, Map<String, dynamic> message) {
+    if (channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+      print("Cannot send message, data channel is not open");
+      return;
+    }
+    
+    try {
+      final jsonMessage = jsonEncode(message);
+      channel.send(RTCDataChannelMessage(jsonMessage));
+      print("Sent data channel message: $jsonMessage");
+    } catch (e) {
+      print("Error sending data channel message: $e");
+    }
+  }
+  
+  // Public method to send OBS commands
+  void sendOBSCommand(String remoteUuid, String action, {String? value}) {
+    final channel = _dataChannels[remoteUuid];
+    if (channel == null) {
+      print("No data channel available for $remoteUuid");
+      print("Available data channels: ${_dataChannels.keys.toList()}");
+      return;
+    }
+    
+    print("Data channel state for $remoteUuid: ${channel.state}");
+    
+    // Handle special refresh state action
+    if (action == 'refreshState') {
+      _requestOBSState(remoteUuid);
+      return;
+    }
+    
+    // For OBS commands to work, we need to send 'remote' field
+    // When viewer has &remote=true, we need to encrypt our remote value
+    Map<String, dynamic> message;
+    
+    // For now, let's try sending remote as boolean true
+    // The viewer has &remote=true, so it should accept remote: true
+    message = {
+      'obsCommand': {
+        'action': action,
+        if (value != null) 'value': value,
+      },
+      'remote': true,  // Boolean true should match &remote=true
+    };
+    
+    // Log the exact JSON being sent for debugging
+    final jsonMessage = jsonEncode(message);
+    print("Sending exact JSON for OBS command: $jsonMessage");
+    
+    _sendDataChannelMessageToChannel(channel, message);
+    print("Sent OBS command to $remoteUuid: $action${value != null ? ' with value: $value' : ''}");
+  }
+  
+  // Get OBS state for a peer
+  OBSState? getOBSState(String remoteUuid) {
+    return _peerOBSStates[remoteUuid];
+  }
+  
+  // Check if peer has OBS control
+  bool hasOBSControl(String remoteUuid) {
+    return _peerHasOBSControl[remoteUuid] ?? false;
+  }
+  // --- End Data Channel and OBS Control Methods ---
 } // End of Signaling Class

@@ -9,7 +9,15 @@
       "Bash(flutter build:*)",
       "Bash(flutter analyze:*)",
       "Bash(flutter:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git checkout:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(mv:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(awk:*)",
+      "Bash(git push:*)"
     ]
   },
   "enableAllProjectMcpServers": false

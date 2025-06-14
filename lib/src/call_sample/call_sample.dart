@@ -10,8 +10,13 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:math'; // Import math for Point
 import 'dart:async';
-import '../../main.dart'; // Import for ConnectionMode enum and startForegroundService
+import '../../main.dart'; // Import for startForegroundService
 import 'package:flutter_background_service/flutter_background_service.dart';
+import '../models/obs_state.dart';
+import '../widgets/obs_controls.dart';
+import '../models/social_stream_config.dart';
+import '../services/social_stream_service.dart';
+import '../widgets/chat_overlay.dart';
 
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
@@ -30,7 +35,8 @@ class CallSample extends StatefulWidget {
   final bool mirrored;
   final int customBitrate;
   final String customSalt;
-  final ConnectionMode connectionMode;
+  final bool enableSystemAudio;
+  final SocialStreamConfig socialStreamConfig;
 
   CallSample(
       {required Key key,
@@ -48,7 +54,8 @@ class CallSample extends StatefulWidget {
       required this.mirrored,
       this.customBitrate = 0,
       this.customSalt = 'vdo.ninja',
-      this.connectionMode = ConnectionMode.standard})
+      this.enableSystemAudio = false,
+      required this.socialStreamConfig})
       : super(key: key);
 
   @override
@@ -70,6 +77,23 @@ class _CallSampleState extends State<CallSample> {
   bool mirrored = true;
   bool _showViewLink = true;
   bool _hasViewers = false;
+  bool _showOBSControls = false;
+  bool _showChat = false; // Will be set to true if Social Stream is enabled
+  
+  // Social Stream
+  SocialStreamService? _socialStreamService;
+  final StreamController<ChatMessage> _chatStreamController = StreamController<ChatMessage>.broadcast();
+  
+  // Connection quality monitoring
+  String _connectionQuality = 'Connecting...';
+  Color _qualityColor = Colors.orange;
+  Timer? _connectionQualityTimer;
+  int _retryCount = 0;
+  static const int MAX_RETRIES = 3;
+  
+  // Loading state
+  bool _isLoading = true;
+  String _loadingMessage = 'Initializing camera...';
 
   // --- Pinch to Zoom State ---
   double _currentZoom = 1.0;
@@ -83,6 +107,10 @@ class _CallSampleState extends State<CallSample> {
   
   // iOS platform view controller reference
   RTCVideoPlatformViewController? _iosViewController;
+  
+  // OBS Control state
+  Map<String, OBSState> _peerOBSStates = {};
+  Map<String, bool> _peerHasOBSControl = {};
 
   _CallSampleState();
 
@@ -98,17 +126,67 @@ class _CallSampleState extends State<CallSample> {
     _currentZoom = 1.0; // Start at no zoom
     // -----------------------
     _connect();
+    
+    // Initialize Social Stream if enabled
+    if (widget.socialStreamConfig.enabled) {
+      _initializeSocialStream();
+    }
   }
 
   initRenderers() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize(); // Keep if needed
   }
+  
+  void _initializeSocialStream() {
+    print('[CallSample] === INITIALIZING SOCIAL STREAM ===');
+    print('[CallSample] Config enabled: ${widget.socialStreamConfig.enabled}');
+    print('[CallSample] Config mode: ${widget.socialStreamConfig.mode}');
+    print('[CallSample] Config sessionId: ${widget.socialStreamConfig.sessionId}');
+    
+    _socialStreamService = SocialStreamService(
+      config: widget.socialStreamConfig,
+      onChatMessage: (ChatMessage message) {
+        print('[CallSample] Chat message received from Social Stream!');
+        print('[CallSample] From: ${message.author}');
+        print('[CallSample] Message: ${message.content}');
+        _chatStreamController.add(message);
+      },
+    );
+    
+    // Set chat to visible by default when Social Stream is enabled
+    if (widget.socialStreamConfig.enabled && mounted) {
+      setState(() {
+        _showChat = true;
+      });
+      print('[CallSample] Chat overlay set to visible by default');
+    }
+    
+    // Connect to Social Stream
+    print('[CallSample] Calling Social Stream connect()...');
+    _socialStreamService!.connect().then((_) {
+      print('[CallSample] Social Stream connect() completed');
+    }).catchError((error) {
+      print('[CallSample] Error connecting to Social Stream: $error');
+    });
+  }
+  
+  void _toggleChat() {
+    if (mounted) {
+      setState(() {
+        _showChat = !_showChat;
+      });
+      print("Chat visibility toggled: $_showChat");
+    }
+  }
 
   @override
   deactivate() {
     _zoomDebounceTimer?.cancel();
     _focusPointTimer?.cancel();
+    _connectionQualityTimer?.cancel();
+    _chatStreamController.close();
+    _socialStreamService?.dispose();
 
     try {
       _signaling?.close(); // Add null check
@@ -153,21 +231,30 @@ class _CallSampleState extends State<CallSample> {
 
 	Widget _buildVideoRenderer() {
 	  // Choose the renderer based on platform and add performance optimizations
-	  print("Building video renderer. Stream: ${_localRenderer.srcObject?.id ?? 'null'}, Preview: $preview, InCalling: $_inCalling");
+	  // Commented out to reduce log spam: print("Building video renderer. Stream: ${_localRenderer.srcObject?.id ?? 'null'}, Preview: $preview, InCalling: $_inCalling");
 	  
-	  // If no stream is available yet, show a loading state
-	  if (_localRenderer.srcObject == null) {
+	  // If loading or no stream is available yet, show a loading state
+	  if (_isLoading || _localRenderer.srcObject == null) {
 	    return Container(
 	      color: Colors.black,
 	      child: Center(
 	        child: Column(
 	          mainAxisAlignment: MainAxisAlignment.center,
 	          children: [
-	            CircularProgressIndicator(color: Colors.white),
+	            CircularProgressIndicator(
+	              color: Colors.blue,
+	              strokeWidth: 3,
+	            ),
 	            SizedBox(height: 20),
-	            Text("Starting camera...", style: TextStyle(color: Colors.white)),
-	            Text("Stream: ${_localRenderer.srcObject?.id ?? 'null'}", 
-	                 style: TextStyle(color: Colors.white70, fontSize: 12)),
+	            Text(
+	              _loadingMessage.isNotEmpty ? _loadingMessage : "Starting camera...", 
+	              style: TextStyle(color: Colors.white, fontSize: 16),
+	            ),
+	            SizedBox(height: 8),
+	            Text(
+	              "Please grant camera and microphone permissions", 
+	              style: TextStyle(color: Colors.white70, fontSize: 12),
+	            ),
 	          ],
 	        ),
 	      ),
@@ -214,6 +301,69 @@ class _CallSampleState extends State<CallSample> {
       });
       print("View link visibility toggled: $_showViewLink");
     }
+  }
+  
+  void _toggleOBSControls() {
+    if (mounted) {
+      setState(() {
+        _showOBSControls = !_showOBSControls;
+      });
+      print("OBS controls visibility toggled: $_showOBSControls");
+      
+      if (_showOBSControls && _peerOBSStates.isNotEmpty) {
+        final obsState = _peerOBSStates.entries.first.value;
+        print("Current OBS state for ${_peerOBSStates.entries.first.key}:");
+        print("  Recording: ${obsState.recording}");
+        print("  Streaming: ${obsState.streaming}");
+        print("  VirtualCam: ${obsState.virtualcam}");
+        print("  Visibility: ${obsState.visibility}");
+        print("  SourceActive: ${obsState.sourceActive}");
+        print("  Control Level: ${obsState.details?.controlLevel}");
+        print("  Current Scene: ${obsState.details?.currentSceneName}");
+        print("  Scenes: ${obsState.details?.scenes}");
+      }
+    }
+  }
+  
+  bool _shouldShowOBSControls() {
+    if (_peerOBSStates.isEmpty) return false;
+    
+    // Check if ANY connected peer has control level >= 4
+    for (var obsState in _peerOBSStates.values) {
+      final controlLevel = obsState.details?.controlLevel ?? 0;
+      if (controlLevel >= 4) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  int _getHighestControlLevel() {
+    int highestLevel = 0;
+    for (var obsState in _peerOBSStates.values) {
+      final controlLevel = obsState.details?.controlLevel ?? 0;
+      if (controlLevel > highestLevel) {
+        highestLevel = controlLevel;
+      }
+    }
+    return highestLevel;
+  }
+  
+  // Get the peer with the highest control level
+  MapEntry<String, OBSState>? _getPeerWithHighestControl() {
+    MapEntry<String, OBSState>? bestPeer;
+    int highestLevel = 0;
+    
+    for (var entry in _peerOBSStates.entries) {
+      final controlLevel = entry.value.details?.controlLevel ?? 0;
+      if (controlLevel > highestLevel) {
+        highestLevel = controlLevel;
+        bestPeer = entry;
+      }
+    }
+    
+    return bestPeer;
   }
 
   void _connect() async {
@@ -410,20 +560,6 @@ class _CallSampleState extends State<CallSample> {
         ? 'wss://wss.vdo.ninja:443' 
         : widget.WSSADDRESS;
     
-    // Modify WebSocket address for TikTok mode
-    if (widget.connectionMode == ConnectionMode.tiktok) {
-      // TikTok mode uses a specialized WebSocket endpoint
-      if (effectiveWSS == 'wss://wss.vdo.ninja:443') {
-        effectiveWSS = 'wss://wss-tiktok.vdo.ninja:443';
-      } else {
-        // For custom servers, append tiktok parameter
-        effectiveWSS = effectiveWSS.contains('?') 
-            ? '${effectiveWSS}&tiktok=1'
-            : '${effectiveWSS}?tiktok=1';
-      }
-      print("TikTok mode: Using WebSocket address: $effectiveWSS");
-    }
-    
     print("Final WebSocket address: $effectiveWSS");
 
     // Initialize Signaling with the processed TURN list
@@ -437,7 +573,9 @@ class _CallSampleState extends State<CallSample> {
         finalTurnListForSignaling,
         widget.password,
         widget.customBitrate,
-        widget.customSalt);
+        widget.customSalt,
+        widget.enableSystemAudio,
+        widget.socialStreamConfig);
 
     // Set up callbacks
     _signaling?.onSignalingStateChange = (SignalingState state) {
@@ -467,6 +605,8 @@ class _CallSampleState extends State<CallSample> {
           if (mounted) {
             setState(() {
               _inCalling = true;
+              _isLoading = false;
+              _loadingMessage = '';
             });
             MediaStream? localStream = _signaling?.getLocalStream();
             if (localStream != null) {
@@ -497,17 +637,44 @@ class _CallSampleState extends State<CallSample> {
 
     _signaling?.onPeersUpdate = ((event) {
       if (mounted) {
-        setState(() {
-          _selfId = event['self'];
-          _peers = event['peers'];
+        // Handle OBS state updates
+        if (event['event'] == 'obsStateUpdate') {
+          final uuid = event['uuid'] as String;
+          final obsState = event['obsState'] as OBSState;
+          print("OBS state update received for peer $uuid");
+          setState(() {
+            _peerOBSStates[uuid] = obsState;
+            _peerHasOBSControl[uuid] = _signaling?.hasOBSControl(uuid) ?? false;
+            
+            // If OBS controls are open but no peer has control anymore, close them
+            if (_showOBSControls && !_shouldShowOBSControls()) {
+              print("OBS permissions revoked - closing controls");
+              _showOBSControls = false;
+            }
+          });
+        } else {
+          // Handle regular peer updates
+          print("Peer update received: ${event.toString()}");
+          setState(() {
+            _selfId = event['self'];
+            _peers = event['peers'];
 
-          // Auto-hide view link when someone connects
-          if (_peers.length > 0 && _showViewLink && !_hasViewers) {
-            _showViewLink = false;
-            _hasViewers = true;
-            print("Auto-hiding view link due to viewer connection");
-          }
-        });
+            // Clean up OBS states for disconnected peers
+            _peerOBSStates.removeWhere((uuid, _) => !_peers.any((peer) => peer['uuid'] == uuid));
+            _peerHasOBSControl.removeWhere((uuid, _) => !_peers.any((peer) => peer['uuid'] == uuid));
+
+            // Auto-hide view link when someone connects
+            if (_peers.length > 0 && _showViewLink && !_hasViewers) {
+              _showViewLink = false;
+              _hasViewers = true;
+              print("Auto-hiding view link due to viewer connection");
+            }
+          });
+          
+          // Debug: Check stream status after peer update
+          print("After peer update - Preview: $preview, InCalling: $_inCalling, Stream: ${_localRenderer.srcObject?.id ?? 'null'}");
+          print("Current OBS states for peers: ${_peerOBSStates.keys.toList()}");
+        }
       }
     });
 
@@ -534,6 +701,14 @@ class _CallSampleState extends State<CallSample> {
       }
     });
 
+    _signaling?.onDataChannelMessage = (RTCDataChannel dc, RTCDataChannelMessage message) {
+      print("Data channel message received on channel ${dc.label}: ${message.text}");
+    };
+
+    _signaling?.onDataChannel = (RTCDataChannel dc) {
+      print("Data channel created: ${dc.label}");
+    };
+
     // Temporarily disable foreground service to prevent crashes
     // TODO: Implement a more robust background service solution
     /*
@@ -553,9 +728,92 @@ class _CallSampleState extends State<CallSample> {
     }
     */
     
-    // Connect
-    await _signaling?.connect();
+    // Connect with retry logic
+    await _connectWithRetry();
     print("Signaling connect called.");
+    
+    // Start monitoring connection quality
+    _startConnectionQualityMonitoring();
+  }
+  
+  Future<void> _connectWithRetry() async {
+    try {
+      await _signaling?.connect();
+      _retryCount = 0;
+      _updateConnectionQuality('Connected', Colors.green);
+    } catch (e) {
+      print("Connection failed: $e");
+      if (_retryCount < MAX_RETRIES) {
+        _retryCount++;
+        _updateConnectionQuality('Retrying... (${_retryCount}/$MAX_RETRIES)', Colors.orange);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Connection failed. Retrying... (Attempt ${_retryCount}/$MAX_RETRIES)'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        
+        await Future.delayed(Duration(seconds: 2 * _retryCount));
+        return _connectWithRetry();
+      } else {
+        _updateConnectionQuality('Failed', Colors.red);
+        if (mounted) {
+          _showConnectionErrorDialog();
+        }
+      }
+    }
+  }
+  
+  void _showConnectionErrorDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Connection Failed'),
+          content: Text('Unable to establish connection after $MAX_RETRIES attempts.\n\nPlease check your internet connection and try again.'),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _hangUp();
+              },
+            ),
+            TextButton(
+              child: Text('Retry'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _retryCount = 0;
+                _connectWithRetry();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  void _updateConnectionQuality(String quality, Color color) {
+    if (mounted) {
+      setState(() {
+        _connectionQuality = quality;
+        _qualityColor = color;
+      });
+    }
+  }
+  
+  void _startConnectionQualityMonitoring() {
+    _connectionQualityTimer = Timer.periodic(Duration(seconds: 2), (_) {
+      if (_signaling?.active == true) {
+        // In a real implementation, you would check actual connection stats
+        _updateConnectionQuality('Connected', Colors.green);
+      }
+    });
   }
 
   _hangUp() {
@@ -796,6 +1054,19 @@ class _CallSampleState extends State<CallSample> {
     }
   }
 
+  IconData _getQualityIcon() {
+    switch (_connectionQuality) {
+      case 'Connected':
+        return Icons.signal_cellular_alt;
+      case 'Failed':
+        return Icons.signal_cellular_off;
+      case 'Connecting...':
+        return Icons.signal_cellular_connected_no_internet_4_bar;
+      default:
+        return Icons.sync;
+    }
+  }
+
   _info() {
     showDialog(
       context: context,
@@ -1021,9 +1292,13 @@ class _CallSampleState extends State<CallSample> {
     );
 
     // Main return statement for build method
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: PreferredSize(
+    return RawKeyboardListener(
+      focusNode: FocusNode()..requestFocus(),
+      autofocus: true,
+      onKey: _handleKeyEvent,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: PreferredSize(
         preferredSize: Size.fromHeight(kToolbarHeight), // Standard height
         child: SafeArea(
           child: AppBar(
@@ -1054,6 +1329,59 @@ class _CallSampleState extends State<CallSample> {
               ),
             ),
             actions: [
+              // Chat Button - show when Social Stream is enabled
+              if (widget.socialStreamConfig.enabled && _socialStreamService != null) ...[
+                IconButton(
+                  icon: Icon(_showChat ? Icons.chat_bubble : Icons.chat_bubble_outline),
+                  color: _showChat ? Colors.purple : Colors.white,
+                  tooltip: _showChat ? "Hide Chat" : "Show Chat",
+                  onPressed: _toggleChat,
+                ),
+                // Connection status indicator
+                IconButton(
+                  icon: Icon(
+                    _socialStreamService?.isConnected == true 
+                      ? Icons.cloud_done 
+                      : Icons.cloud_off
+                  ),
+                  color: _socialStreamService?.isConnected == true 
+                    ? Colors.green 
+                    : Colors.red,
+                  tooltip: _socialStreamService?.isConnected == true 
+                    ? "Social Stream Connected" 
+                    : "Social Stream Disconnected",
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _socialStreamService?.isConnected == true 
+                            ? 'Social Stream connected to session: ${widget.socialStreamConfig.sessionId}'
+                            : 'Social Stream not connected'
+                        ),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  },
+                ),
+                // Debug button to send test message
+                IconButton(
+                  icon: Icon(Icons.bug_report),
+                  color: Colors.orange,
+                  tooltip: "Send Test Message",
+                  onPressed: () {
+                    print("Sending test message via Social Stream");
+                    _socialStreamService?.sendTestMessage("Test message at ${DateTime.now().toIso8601String()}");
+                  },
+                ),
+              ],
+              // OBS Control Button - show when we have OBS state
+              if (_peerOBSStates.isNotEmpty && _shouldShowOBSControls())
+                IconButton(
+                  icon: Icon(Icons.gamepad),
+                  color: Colors.purple,
+                  tooltip: "OBS Controls",
+                  onPressed: _toggleOBSControls,
+                ),
               // Only show share button when view link is shown
               if (_showViewLink)
                 IconButton(
@@ -1079,11 +1407,14 @@ class _CallSampleState extends State<CallSample> {
           ),
         ),
       ),
-      body: GestureDetector(
-        onScaleStart: _handleScaleStart,
-        onScaleUpdate: _handleScaleUpdate,
-        onTapDown: _handleTapDown,
-        child: Container(
+      body: Stack(
+        children: [
+          // Camera view with gesture detection
+          GestureDetector(
+            onScaleStart: _handleScaleStart,
+            onScaleUpdate: _handleScaleUpdate,
+            onTapDown: _handleTapDown,
+            child: Container(
           color: Colors.black,
           child: Center(
             child: Stack(
@@ -1092,19 +1423,23 @@ class _CallSampleState extends State<CallSample> {
                 // --- Video Display Area ---
                 if (widget.deviceID != 'microphone')
                   Positioned.fill(
-                    child: preview
+                    child: preview && _inCalling
                         ? _buildVideoRenderer()
                         : Container(
-                            color: Colors.black54,
+                            color: Colors.black,
                             child: Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.visibility_off, color: Colors.white, size: 50),
+                                  if (!preview)
+                                    Icon(Icons.visibility_off, color: Colors.white, size: 50),
+                                  if (!_inCalling)
+                                    CircularProgressIndicator(color: Colors.blue),
                                   SizedBox(height: 10),
-                                  Text("Preview Disabled", style: TextStyle(color: Colors.white)),
-                                  Text("Preview: $preview, InCalling: $_inCalling", 
-                                       style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                  Text(
+                                    !preview ? "Preview Disabled" : "Connecting...",
+                                    style: TextStyle(color: Colors.white, fontSize: 16)
+                                  ),
                                 ],
                               ),
                             ),
@@ -1136,20 +1471,34 @@ class _CallSampleState extends State<CallSample> {
 
                 // --- Screen Share Specific UI ---
                 if (widget.deviceID == 'screen')
-                  Container(
-                    color: Colors.black
-                        .withOpacity(0.3), // Dim the background slightly
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(30.0),
-                        child: Text(
-                          "Screen Sharing Active\nEnsure permissions are granted.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold),
-                        ),
+                  Positioned(
+                    bottom: 100, // Position above the controls
+                    left: 20,
+                    right: 20,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.withOpacity(0.5), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.screen_share, color: Colors.blue, size: 24),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Screen Sharing Active",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1173,25 +1522,29 @@ class _CallSampleState extends State<CallSample> {
                     ),
                   ),
 
-                // TikTok Mode Indicator
-                if (widget.connectionMode == ConnectionMode.tiktok)
+                // Connection Quality Indicator (only show when not connected)
+                if (_connectionQuality != 'Connected')
                   Positioned(
-                    top: 48,
-                    left: 20,
+                    top: 100,
+                    right: 20,
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.purple.withOpacity(0.9),
+                        color: _qualityColor.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.purpleAccent, width: 1),
+                        border: Border.all(color: _qualityColor, width: 1),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.flash_on, color: Colors.white, size: 16),
+                          Icon(
+                            _getQualityIcon(),
+                            color: Colors.white,
+                            size: 16,
+                          ),
                           SizedBox(width: 4),
                           Text(
-                            'TikTok Mode',
+                            _connectionQuality,
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -1199,6 +1552,21 @@ class _CallSampleState extends State<CallSample> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                // OBS Status Bar - always at top
+                if (_peerOBSStates.isNotEmpty)
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top,
+                    left: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {}, // Consume tap events
+                      child: OBSStatusBar(
+                        obsStates: _peerOBSStates,
                       ),
                     ),
                   ),
@@ -1248,7 +1616,132 @@ class _CallSampleState extends State<CallSample> {
           ),
         ),
       ),
+          
+          // Chat Overlay
+          if (widget.socialStreamConfig.enabled && _showChat)
+            ChatOverlay(
+              isVisible: _showChat,
+              chatStream: _chatStreamController.stream,
+            ),
+          
+          // OBS Controls Panel - moved outside the camera gesture detector
+          if (_peerOBSStates.isNotEmpty && _showOBSControls) ...[
+            // Semi-transparent backdrop
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleOBSControls, // Close when tapping outside
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                ),
+              ),
+            ),
+            // OBS Controls Panel
+            Positioned(
+              top: MediaQuery.of(context).padding.top + kToolbarHeight + 10,
+              right: 20,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  // Absorb tap events to prevent them from reaching the camera view
+                },
+                onTapDown: (_) {
+                  // Absorb tap down events as well
+                },
+                onScaleStart: (_) {
+                  // Absorb scale events
+                },
+                onScaleUpdate: (_) {
+                  // Absorb scale events
+                },
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.transparent,
+                  child: Container(
+                    width: 280,
+                    constraints: BoxConstraints(maxHeight: 400),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.purple, width: 2),
+                    ),
+                    child: Builder(
+                      builder: (context) {
+                        final bestPeer = _getPeerWithHighestControl();
+                        if (bestPeer == null) {
+                          return Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text(
+                                "No OBS control available",
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ),
+                          );
+                        }
+                        
+                        return OBSControlsExpandedPanel(
+                          obsState: bestPeer.value,
+                          peerUuid: bestPeer.key,
+                          controlLevel: bestPeer.value.details?.controlLevel ?? 0,
+                          onCommand: (action, {value}) {
+                            print("OBS Command triggered in CallSample: $action${value != null ? ' with value: $value' : ''}");
+                            if (_signaling != null) {
+                              _signaling!.sendOBSCommand(bestPeer.key, action, value: value);
+                            } else {
+                              print("ERROR: Signaling is null, cannot send OBS command");
+                            }
+                          },
+                          onClose: _toggleOBSControls,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
       backgroundColor: Colors.black, // Fallback background
-    );
+    ));  // Close RawKeyboardListener
+  }
+  
+  void _handleKeyEvent(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.keyD && 
+          event.isControlPressed) {
+        // Ctrl+D - Log data channel states
+        print('[CallSample] === DEBUG: Logging data channel states ===');
+        _socialStreamService?.logDataChannelStates();
+      } else if (event.logicalKey == LogicalKeyboardKey.keyT && 
+                 event.isControlPressed) {
+        // Ctrl+T - Send test message
+        print('[CallSample] === DEBUG: Sending test message ===');
+        _socialStreamService?.sendTestMessage('Debug test message from keyboard shortcut');
+      } else if (event.logicalKey == LogicalKeyboardKey.keyS && 
+                 event.isControlPressed) {
+        // Ctrl+S - Show Social Stream status
+        print('[CallSample] === DEBUG: Social Stream Status ===');
+        print('[CallSample] Enabled: ${widget.socialStreamConfig.enabled}');
+        print('[CallSample] Mode: ${widget.socialStreamConfig.mode}');
+        print('[CallSample] Session: ${widget.socialStreamConfig.sessionId}');
+        print('[CallSample] Connected: ${_socialStreamService?.isConnected}');
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Social Stream Debug:\n'
+              'Connected: ${_socialStreamService?.isConnected}\n'
+              'Mode: ${widget.socialStreamConfig.mode}\n'
+              'Session: ${widget.socialStreamConfig.sessionId}'
+            ),
+            duration: Duration(seconds: 5),
+            backgroundColor: Colors.purple,
+          ),
+        );
+      }
+    }
   }
 }
