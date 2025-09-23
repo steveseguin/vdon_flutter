@@ -27,42 +27,56 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def hasReleaseKeystore = keystorePropertiesFile.exists() &&
+        keystoreProperties['storeFile'] &&
+        file(keystoreProperties['storeFile']).exists()
+
+if (!hasReleaseKeystore) {
+    println 'Using debug signing configuration for release builds because key.properties was not found.'
+}
+
 android {
-	compileSdkVersion 36
-	
-	defaultConfig {
-		applicationId "flutter.vdo.ninja"
-		minSdkVersion 21
-		targetSdkVersion 36
-		versionCode flutterVersionCode.toInteger()
-		versionName flutterVersionName
-		testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-		ndk {
-			abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
-		}
-	}
+    compileSdkVersion 36
+
+    defaultConfig {
+        applicationId "flutter.vdo.ninja"
+        minSdkVersion 21
+        targetSdkVersion 36
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+    }
 
     compileOptions {
         coreLibraryDesugaringEnabled true
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
 
     signingConfigs {
-        release {
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword keystoreProperties['storePassword']
+        if (hasReleaseKeystore) {
+            release {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
         }
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             // Removed ProGuard configuration
         }
     }
@@ -95,5 +109,5 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
-	implementation "androidx.core:core-ktx:1.15.0"
+    implementation "androidx.core:core-ktx:1.16.0"
 }

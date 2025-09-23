@@ -29,4 +29,4 @@ tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-ext.kotlin_version = '2.0.0'
+ext.kotlin_version = '2.2.0'

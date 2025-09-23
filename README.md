@@ -1,80 +1,100 @@
-# VDO.Ninja's Flutter app.
+# VDO.Ninja Flutter Capture
+
+VDO.Ninja's companion Flutter app for publishing camera, microphone, or screen feeds from Android and iOS devices to VDO.Ninja collections or custom self-hosted domains. Mobile is the only supported target; other Flutter platforms may compile but are not tested or maintained.
 
 ## Features
+- Share camera and microphone feeds to VDO.Ninja on Android and iOS.
+- Screen-share on Android with optional mic capture.
+- Background operation for long-running captures (subject to each device's battery optimisations).
+- Supports custom VDO.Ninja-compatible domains by replacing the default endpoint.
 
-- supports camera and mic sharing to VDO.Ninja on Android and iOS.
-- supports screen-sharing on Android, with mic support available
-- can work when in the background, at least until battery-saving mode of some phones kick in
-- can work with custom domains, other than vdo.ninja; just replace vdo.ninja with your own domain
+## Current Limitations
+- Group rooms are not yet supported.
+- Encrypted (&password) connections are not available; use `&password=false` on viewers.
+- iOS does not provide screen-share today.
+- No UVC / external camera support, and some device cameras may remain incompatible.
+- Not feature-complete with the web version of VDO.Ninja.
 
-<img src="https://user-images.githubusercontent.com/2575698/151709718-66d589ee-5ed3-4249-8646-f16491ca2a82.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709736-b0ca7d6a-484f-4bb5-8669-ce9a06002991.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709732-d9729049-b7d3-4c90-8e2e-b0bc1a1b094f.jpg" width="100px"> <img src="https://user-images.githubusercontent.com/2575698/151709947-6beeb4f0-d8bd-4fbf-9d94-294c5f4efdb3.jpg" width="100px">
+## Requirements
+- Flutter SDK 3.22 or newer (tested with Flutter 3.33.0-1.0.pre.476).
+- Dart 3 toolchain bundled with the chosen Flutter release.
+- macOS 13+ with Xcode 15+ for iOS development/signing.
+- Android Studio (or command-line Android SDK), including:
+  - Android SDK Platform 36 and Build-Tools 36.0.0.
+  - Java 17 toolchain (bundled with current Android Studio releases).
+- Optional: a physical device connected via USB for deployment (`flutter run`).
 
-## Limitations
+> **Note:** The Android build uses Android Gradle Plugin 8.6.0 and Kotlin 2.2.0. When updating Flutter or plugins, keep these minimums in sync.
 
-- does not support group rooms yet
-- does not support encrypted handshakes yet (passwords must be set false)
-- screen-share does not yet work on iOS
-- no UVC / external camera support
-- *some* cameras won't be supported
-- not at feature partity with web-app version of VDO.Ninja
-
-## Compiled Android APK:
-
-https://drive.google.com/file/d/1M0kv5nWLtcfl2JOnsAGiG1zUmkeIVLyZ/view?usp=sharing
-
-
-## How to deploy and run app
-
-You'll need flutter installed and added to your PATH first:
-https://docs.flutter.dev/get-started/install
-
-You'll also need Android Studio I suppose installed and setup,
-
-But then,to run,
-```
-git clone https://github.com/steveseguin/vdon_flutter
+## Getting Started
+```bash
+git clone https://github.com/steveseguin/vdon_flutter.git
 cd vdon_flutter
-flutter packages get
-flutter run
+flutter pub get
 ```
 
-`flutter pub upgrade --major-versions` can also be used to update packages.
-
-This works okay for Android; macOS users might want to use Xcode directly instead.  
-
-Mac users building with xcode may also want to have a real iOS device attached for this to work.
-
-### How to build for Android
+To verify your environment, run:
+```bash
+flutter doctor
 ```
+Resolve any reported issues before building.
+
+## Running the App
+### Android (debug)
+```bash
+flutter run -d android
+```
+Ensure USB debugging is enabled on the device or use an emulator running API level 33+.
+
+### iOS (debug)
+```bash
+flutter run -d ios
+```
+On macOS, you can alternatively open `ios/Runner.xcworkspace` in Xcode, select a real device, and press *Run*. iOS simulators are convenient for UI work but do not expose full camera/microphone capabilities.
+
+## Building for Release
+### Android APK
+```bash
 flutter build apk
 ```
+By default the release build falls back to the debug signing configuration if `android/key.properties` is missing. To produce a production-signed APK:
+1. Create or locate your keystore (`keystore.jks`).
+2. Add `android/key.properties` with:
+   ```properties
+   storeFile=/absolute/path/to/keystore.jks
+   storePassword=...
+   keyAlias=...
+   keyPassword=...
+   ```
+3. Re-run `flutter build apk`.
+4. The artifact is written to `build/app/outputs/flutter-apk/app-release.apk`.
 
-### How to build for iOS
+### iOS App
+1. From macOS, run `flutter build ipa` **or** open the Xcode project under `ios/`.
+2. Configure signing & capabilities with your Apple Developer certificate.
+3. Use Xcode’s Archive workflow or `flutter build ipa --export-options-plist=<path>` to generate an `.ipa`.
 
-You'll need to install Flutter and add it to your PATH. You'll also need Xcode installed:
-https://docs.flutter.dev/get-started/install/macos
+## Updating Dependencies
+- `flutter pub upgrade --major-versions` updates Dart packages.
+- Review generated changes in `pubspec.lock` and test both Android and iOS builds afterwards.
+- When Flutter SDK updates introduce new Gradle or Kotlin minimums, mirror those versions in `android/settings.gradle` and `android/build.gradle`.
 
-You may need to install cocoapods, etc. `sudo gem install cocoapods` for example.
+## Distribution
+If you ship the app through app stores, keep in mind:
+- Android Play Store submissions require a release keystore (not the debug keystore).
+- iOS uploads need an Apple Developer account (paid) and a registered bundle identifier.
+- TestFlight/TestFairy or local side-loading are recommended for quick validation.
 
-From the `ios` folder, you may want to try installing the gems there or whatever is needed.
+## Contributing
+Contributions that enhance mobile capture reliability are welcome. Common focus areas include:
+- Improving hardware compatibility (camera / microphone / UVC).
+- Implementing encrypted room support and feature parity with the web app.
+- Robust background service behaviour on Android and iOS.
 
-Once Flutter is installed, Just open the project with XCode, connect a real iOS device to the system, and build the app. The project should be in the ios folder of the repo.
+To propose changes:
+1. Fork the repository.
+2. Create a feature branch, make changes, and ensure `flutter analyze` and target builds pass.
+3. Submit a pull request with testing notes.
 
-You may need a developer certificate from Apple to build iOS; Apple might have free ones available for testing only, but otherwise, ~ $100 USD. 
-
-## App store hosted versions
-
-If you make a pull-request to this repo, I can try to update the store-hosted version of the app with your approved changes. The app is free to download from the store.
-
-## Supported viewer-side flags
-
-- &codec
-- &bitrate
-- &audiobitrate
-- &scale
-
-The viewer requires &password=false to be used.
-
-## Contributions welcomed
-
-- UVC / USB camera and microphone support is very much welcomed
+## License
+This project is released under the `LICENSE` file included in the repository.
