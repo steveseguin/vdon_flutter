@@ -60,6 +60,10 @@ android {
         jvmTarget = '17'
     }
 
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
     signingConfigs {
         if (hasReleaseKeystore) {
             release {
@@ -71,6 +75,10 @@ android {
         }
     }
     buildTypes {
+        debug {
+            minifyEnabled false
+            shrinkResources false
+        }
         release {
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
@@ -89,7 +97,7 @@ android {
         disable 'InvalidPackage'
     }
 
-    namespace 'de.julianassmann.flutter_background_example'
+    namespace 'com.cloudwebrtc.vdon_flutter'
 }
 
 

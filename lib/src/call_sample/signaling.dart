@@ -1,4 +1,4 @@
-// signaling.dart -- NEW , does not connect
+﻿// signaling.dart -- NEW , does not connect
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -18,6 +18,7 @@ import 'package:flutter_webrtc/src/native/ios/audio_configuration.dart';
 // Import specific Android audio configuration (optional but good practice)
 // import 'package:flutter_webrtc/src/native/android/audio_configuration.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_background/flutter_background.dart';
 
 // --- Enums and Helper Functions (Keep as is) ---
 enum SignalingState {
@@ -2355,6 +2356,8 @@ Future<MediaStream> createStream() async {
     print("Failed to create dummy PeerConnection: $e");
   }
   
+  bool startedMediaProjectionService = false;
+
   try {
     // Set up resolution based on quality setting
     String width = quality ? "1920" : "1280";
@@ -2365,68 +2368,127 @@ Future<MediaStream> createStream() async {
     
     if (deviceID == "screen") {
       print("Requesting screen sharing...");
-      
-      // For iOS, we need to use the proper broadcast extension approach
-      if (Platform.isIOS) {
-        print("Setting up iOS screen capture with broadcast extension");
-        
-        // Request permissions first
-        await Permission.microphone.request();
-		
-		
-        
-        // IMPORTANT: When using a broadcast extension, use getDisplayMedia with 
-        // a different constraint structure that explicitly mentions the extension
-        Map<String, dynamic> screenConstraints = {
-		  'video': {
-			'deviceId': 'broadcast',
-			'mandatory': {
-			  'width': width,
-			  'height': height,
-			  'maxWidth': width,
-			  'maxHeight': height,  // Fixed: was using width instead of height
-			  'frameRate': frameRate
-			},
-		  },
-		};
-        
-        stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
-        
-        // Configure iOS audio session for screen sharing
-        await initializeIOSAudioSession(forScreenShare: true);
-        
-        // Note: iOS system audio capture is not supported due to platform restrictions
-      } else {
-        // Android/Web implementation
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          'video': {
-            'mandatory': {
-              'minWidth': width,
-              'maxWidth': width,
-              'minHeight': height,
-              'maxHeight': height,
-              'maxFrameRate': frameRate,
-            }
-          },
-          'audio': true, // Try to capture system audio on Android
-        });
-        
-        // Try to add system audio capture for Android
-        if (Platform.isAndroid) {
-          try {
-            MediaStream? systemAudio = await _trySystemAudioCapture();
-            if (systemAudio != null) {
-              // Mix system audio with screen capture
-              var audioTracks = systemAudio.getAudioTracks();
-              if (audioTracks.isNotEmpty) {
-                await stream.addTrack(audioTracks.first);
-                print("Added system audio track to screen share");
+
+      // For Android 14+ (SDK 34+), start MediaProjection foreground service BEFORE requesting screen capture
+      if (Platform.isAndroid) {
+        print("Starting MediaProjection foreground service for Android 14+...");
+        try {
+          // Always initialize first (required before checking permissions)
+          const androidConfig = FlutterBackgroundAndroidConfig(
+            notificationTitle: 'VDO.Ninja Screen Sharing',
+            notificationText: 'Screen sharing is active',
+            notificationImportance: AndroidNotificationImportance.normal,
+            notificationIcon: AndroidResource(
+              name: 'ic_launcher',
+              defType: 'mipmap',
+            ),
+          );
+
+          final bool hasPermissions = await FlutterBackground.initialize(androidConfig: androidConfig);
+
+          if (hasPermissions) {
+            if (!FlutterBackground.isBackgroundExecutionEnabled) {
+              final bool enabled = await FlutterBackground.enableBackgroundExecution();
+              if (enabled) {
+                startedMediaProjectionService = true;
+                print("MediaProjection foreground service started successfully");
+                // Give the service time to fully initialize before screen capture
+                await Future.delayed(const Duration(milliseconds: 500));
+              } else {
+                print("WARNING: Failed to enable background execution");
               }
+            } else {
+              print("Background execution already enabled");
+              startedMediaProjectionService = true;
             }
-          } catch (e) {
-            print("Failed to add system audio to screen share: $e");
+          } else {
+            print("WARNING: Background execution permissions not granted");
           }
+        } catch (e) {
+          print("Error starting foreground service: $e");
+          print("Continuing without foreground service...");
         }
+      }
+
+      try {
+        // For iOS, we need to use the proper broadcast extension approach
+        if (Platform.isIOS) {
+          print("Setting up iOS screen capture with broadcast extension");
+          
+          // Request permissions first
+          await Permission.microphone.request();
+		  
+		  
+          
+          // IMPORTANT: When using a broadcast extension, use getDisplayMedia with 
+          // a different constraint structure that explicitly mentions the extension
+          Map<String, dynamic> screenConstraints = {
+		    'video': {
+			  'deviceId': 'broadcast',
+			  'mandatory': {
+			    'width': width,
+			    'height': height,
+			    'maxWidth': width,
+			    'maxHeight': height,  // Fixed: was using width instead of height
+			    'frameRate': frameRate
+			  },
+		    },
+		  };
+          
+          stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
+          
+          // Configure iOS audio session for screen sharing
+          await initializeIOSAudioSession(forScreenShare: true);
+          
+          // Note: iOS system audio capture is not supported due to platform restrictions
+        } else {
+          // Android/Web implementation
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            'video': {
+              'mandatory': {
+                'minWidth': width,
+                'maxWidth': width,
+                'minHeight': height,
+                'maxHeight': height,
+                'maxFrameRate': frameRate,
+              }
+            },
+            'audio': true, // Try to capture system audio on Android
+          });
+          
+          // System audio is already included in the screen share above (audio: true)
+          // Commenting out redundant _trySystemAudioCapture to avoid double permission prompt
+          /*
+          // Try to add system audio capture for Android
+          if (Platform.isAndroid) {
+            try {
+              MediaStream? systemAudio = await _trySystemAudioCapture();
+              if (systemAudio != null) {
+                // Mix system audio with screen capture
+                var audioTracks = systemAudio.getAudioTracks();
+                if (audioTracks.isNotEmpty) {
+                  await stream.addTrack(audioTracks.first);
+                  print("Added system audio track to screen share");
+                }
+              }
+            } catch (e) {
+              print("Failed to add system audio to screen share: $e");
+            }
+          }
+          */
+        }
+      } catch (e) {
+        if (startedMediaProjectionService) {
+          print("Stopping MediaProjection service due to screen capture failure...");
+          try {
+            const platform = MethodChannel('vdoninja/media_projection');
+            await platform.invokeMethod('stopMediaProjectionService');
+          } catch (stopError) {
+            print("Error stopping MediaProjection service after failure: $stopError");
+          }
+          startedMediaProjectionService = false;
+        }
+        rethrow;
       }
     } else if (deviceID == "microphone") {
       print("Requesting audio-only...");
@@ -2486,6 +2548,16 @@ Future<MediaStream> createStream() async {
     return stream;
   } catch (e) {
     print("createStream() failed: $e");
+
+    if (startedMediaProjectionService) {
+      print("Stopping MediaProjection service due to createStream failure...");
+      try {
+        const platform = MethodChannel('vdoninja/media_projection');
+        await platform.invokeMethod('stopMediaProjectionService');
+      } catch (stopError) {
+        print("Error stopping MediaProjection service after createStream failure: $stopError");
+      }
+    }
     
     // Clean up dummy PC on error
     if (dummyPC != null) {
@@ -2580,6 +2652,37 @@ Future<void> _createOffer(String remoteUuid, String sessionId, RTCPeerConnection
   }
 }
 	
+int? _cachedAndroidSdkInt;
+
+Future<int?> _getAndroidSdkInt() async {
+  if (!Platform.isAndroid) {
+    return null;
+  }
+
+  if (_cachedAndroidSdkInt != null) {
+    return _cachedAndroidSdkInt;
+  }
+
+  try {
+    const MethodChannel channel = MethodChannel('vdoninja/device_info');
+    final Map<String, dynamic>? deviceData =
+        await channel.invokeMapMethod<String, dynamic>('getDeviceInfo');
+    final dynamic sdkValue = deviceData?['androidVersion'];
+    if (sdkValue is int) {
+      _cachedAndroidSdkInt = sdkValue;
+      return _cachedAndroidSdkInt;
+    }
+    if (sdkValue is num) {
+      _cachedAndroidSdkInt = sdkValue.toInt();
+      return _cachedAndroidSdkInt;
+    }
+  } catch (e) {
+    print("Error retrieving Android SDK version: $e");
+  }
+
+  return null;
+}
+
 // Helper to detect device performance capability
 Future<bool> _isHighPerformanceDevice() async {
   // Simple heuristic: check if device has enough memory
@@ -2895,6 +2998,21 @@ Future<MediaStream?> _trySystemAudioCapture() async {
         print("Error disposing local stream: $e");
       }
       _localStream = null;
+
+      // Stop MediaProjection service if it was screen sharing on Android
+      if (Platform.isAndroid && deviceID == "screen") {
+        final int? sdkInt = await _getAndroidSdkInt();
+        if (sdkInt == null || sdkInt >= 34) {
+          print("Stopping MediaProjection service...");
+          try {
+            const platform = MethodChannel('vdoninja/media_projection');
+            await platform.invokeMethod('stopMediaProjectionService');
+            print("MediaProjection service stopped");
+          } catch (e) {
+            print("Error stopping MediaProjection service: $e");
+          }
+        }
+      }
     }
 
     // Close all peer connections
@@ -2981,3 +3099,4 @@ Future<MediaStream?> _trySystemAudioCapture() async {
   }
   // --- End Public Bitrate Control Methods ---
 } // End of Signaling Class
+

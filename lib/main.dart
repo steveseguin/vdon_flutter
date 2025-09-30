@@ -77,13 +77,11 @@ void main() {
     
     // Initialize notifications first
     await initializeNotifications();
-    
-    // Temporarily disabled - TODO: Fix foreground service
-    /*
+
+    // Configure foreground service for Android 14+ MediaProjection requirement
     if (Platform.isAndroid) {
       await configureBackgroundService();
     }
-    */
 
     if (WebRTC.platformIsDesktop) {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;

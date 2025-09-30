@@ -9,7 +9,17 @@
       "Bash(flutter build:*)",
       "Bash(flutter analyze:*)",
       "Bash(flutter:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Read(//mnt/c/Users/steve/**)",
+      "Bash(/mnt/c/Users/steve/Code/flutter/bin/flutter clean)",
+      "Bash(cmd.exe:*)",
+      "Bash(./gradlew:*)",
+      "Bash(unzip:*)",
+      "Bash(/mnt/c/Users/steve/Code/flutter/bin/flutter.bat clean)",
+      "Bash(tee:*)",
+      "Bash(adb logcat:*)"
     ]
   },
   "enableAllProjectMcpServers": false

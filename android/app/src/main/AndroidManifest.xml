@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.cloudwebrtc.vdon_flutter">
 
     <uses-permission android:name="android.permission.INTERNET"/>
 	
@@ -15,12 +16,13 @@
 	<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
 	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
+	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 	<uses-permission android:name="android.permission.CAPTURE_AUDIO_HOTWORD"/>
 	<uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"/>
+	<uses-permission android:name="android.permission.CAPTURE_VIDEO_OUTPUT"/>
 	<uses-permission android:name="android.permission.CAPTURE_MEDIA_OUTPUT"/>
 	<uses-permission android:name="android.permission.CAPTURE_TUNER_AUDIO_INPUT"/>
 	<uses-permission android:name="android.permission.CAPTURE_VOICE_COMMUNICATION_OUTPUT"/>
@@ -71,7 +73,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <activity
-            android:name="io.flutter.embedding.android.FlutterActivity"
+            android:name=".MainActivity"
 			android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
@@ -92,6 +94,17 @@
 			android:foregroundServiceType="camera|microphone|mediaProjection"
 			tools:replace="android:exported"
 			android:exported="false"/>
-		
+
+		<service
+			android:name="de.julianassmann.flutter_background.IsolateHolderService"
+			android:foregroundServiceType="mediaProjection"
+			android:enabled="true"
+			android:exported="false"/>
+
+		<service
+			android:name="com.cloudwebrtc.vdon_flutter.MediaProjectionService"
+			android:foregroundServiceType="mediaProjection"
+			android:exported="false"/>
+
     </application>
 </manifest>
