@@ -8,6 +8,11 @@ VDO.Ninja's companion Flutter app for publishing camera, microphone, or screen f
 - Background operation for long-running captures (subject to each device's battery optimisations).
 - Supports custom VDO.Ninja-compatible domains by replacing the default endpoint.
 
+## VDO.Ninja Publisher guides
+
+- [Send Android video to OBS with SRT](docs/android-srt-to-obs.md)
+- [Send iPhone video to OBS with SRT](docs/iphone-srt-to-obs.md)
+
 ## Current Limitations
 - Group rooms are not yet supported.
 - Encrypted (&password) connections are not available; use `&password=false` on viewers.
@@ -72,7 +77,7 @@ By default the release build falls back to the debug signing configuration if `a
 ### iOS App
 1. From macOS, run `flutter build ipa` **or** open the Xcode project under `ios/`.
 2. Configure signing & capabilities with your Apple Developer certificate.
-3. Use Xcode’s Archive workflow or `flutter build ipa --export-options-plist=<path>` to generate an `.ipa`.
+3. Use Xcodeâ€™s Archive workflow or `flutter build ipa --export-options-plist=<path>` to generate an `.ipa`.
 
 ## Updating Dependencies
 - `flutter pub upgrade --major-versions` updates Dart packages.
