@@ -7,12 +7,7 @@ VDO.Ninja's companion Flutter app for publishing camera, microphone, or screen f
 - Screen-share on Android with optional mic capture.
 - Background operation for long-running captures (subject to each device's battery optimisations).
 - Supports custom VDO.Ninja-compatible domains by replacing the default endpoint.
-
-## VDO.Ninja Publisher guides
-
-- [Send Android video to OBS with SRT](docs/android-srt-to-obs.md)
-- [Send iPhone video to OBS with SRT](docs/iphone-srt-to-obs.md)
-
+  
 ## Current Limitations
 - Group rooms are not yet supported.
 - Encrypted (&password) connections are not available; use `&password=false` on viewers.
